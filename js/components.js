@@ -67,7 +67,7 @@ const Components = {
                     <div style="width: 12px; height: 12px; border-radius: var(--radius-full); background: ${account.color}; box-shadow: 0 0 10px ${account.color};"></div>
                     <h3 class="card-title">${account.name}</h3>
                 </div>
-                <span class="material-icons-round card-action">more_horiz</span>
+                <span class="material-icons-round card-action" onclick="app.showEditAccountModal(${account.id})">edit</span>
             </div>
             <div style="color: var(--text-secondary); font-size: 14px; margin-bottom: 8px;">${account.type} Account</div>
             <div style="font-size: 28px; font-weight: 700;">${DataManager.formatCurrency(account.balance)}</div>

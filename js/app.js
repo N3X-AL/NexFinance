@@ -247,6 +247,78 @@ class App {
         });
     }
 
+    showEditAccountModal(id) {
+        const account = appData.accounts.find(a => a.id === id);
+        if (!account) return;
+
+        const content = `
+            <form id="edit-account-form">
+                <div class="form-group">
+                    <label class="form-label">Account Name</label>
+                    <input type="text" id="ea-name" class="form-control" value="${account.name}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Account Type</label>
+                    <select id="ea-type" class="form-control">
+                        <option value="Checking" ${account.type === 'Checking' ? 'selected' : ''}>Checking</option>
+                        <option value="Savings" ${account.type === 'Savings' ? 'selected' : ''}>Savings</option>
+                        <option value="Credit" ${account.type === 'Credit' ? 'selected' : ''}>Credit Card</option>
+                        <option value="Investment" ${account.type === 'Investment' ? 'selected' : ''}>Investment</option>
+                        <option value="Loan" ${account.type === 'Loan' ? 'selected' : ''}>Loan</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Current Balance</label>
+                    <input type="number" id="ea-balance" class="form-control" value="${account.balance}" step="0.01" required>
+                </div>
+                <div style="margin-top: 24px; text-align: center;">
+                    <button type="button" class="btn btn-danger" onclick="app.deleteAccount(${id})" style="width: 100%;">
+                        <span class="material-icons-round" style="font-size: 18px;">delete</span> Delete Account
+                    </button>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Deleting this account will also permanently delete all associated transactions.</p>
+                </div>
+            </form>
+        `;
+
+        this.showModal('Edit Account', content, () => {
+            const form = document.getElementById('edit-account-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+            
+            const name = document.getElementById('ea-name').value;
+            const type = document.getElementById('ea-type').value;
+            const balance = parseFloat(document.getElementById('ea-balance').value);
+            
+            const colorMap = {
+                'Checking': 'var(--primary)',
+                'Savings': 'var(--success)',
+                'Credit': 'var(--danger)',
+                'Investment': 'var(--accent)',
+                'Loan': 'var(--warning)'
+            };
+            
+            DataManager.editAccount(id, {
+                name,
+                type,
+                balance,
+                color: colorMap[type] || 'var(--primary)'
+            });
+            
+            this.navigate(this.currentRoute);
+            return true;
+        });
+    }
+
+    deleteAccount(id) {
+        if (confirm("Are you sure you want to delete this account? All associated transactions will be permanently lost. This action cannot be undone.")) {
+            DataManager.deleteAccount(id);
+            this.closeModal();
+            this.navigate(this.currentRoute);
+        }
+    }
+
     showAddLoanModal(type) {
         const title = type === 'given' ? 'I Lent Money' : 'I Borrowed Money';
         const personLabel = type === 'given' ? 'Who did you lend to?' : 'Who did you borrow from?';

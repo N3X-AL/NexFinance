@@ -116,5 +116,26 @@ const DataManager = {
         });
         
         DataManager.saveData();
+    },
+    
+    editAccount: (id, updatedData) => {
+        const accountIndex = appData.accounts.findIndex(a => a.id === id);
+        if (accountIndex !== -1) {
+            appData.accounts[accountIndex] = { ...appData.accounts[accountIndex], ...updatedData };
+            DataManager.saveData();
+        }
+    },
+    
+    deleteAccount: (id) => {
+        // Remove the account
+        appData.accounts = appData.accounts.filter(a => a.id !== id);
+        
+        // Remove all transactions associated with this account
+        appData.transactions = appData.transactions.filter(t => t.accountId !== id);
+        
+        // Remove any loans associated with this account (if we were tracking them by account id exclusively)
+        // Since loans just generate transactions, removing the transactions above handles the ledger side.
+        
+        DataManager.saveData();
     }
 };
