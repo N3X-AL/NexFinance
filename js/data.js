@@ -1,36 +1,21 @@
-const appData = {
+// Load from LocalStorage if available
+const defaultData = {
     accounts: [
-        { id: 1, name: 'Main Checking', type: 'Checking', balance: 5432.50, color: 'var(--primary)' },
-        { id: 2, name: 'High Yield Savings', type: 'Savings', balance: 12500.00, color: 'var(--success)' },
-        { id: 3, name: 'Rewards Credit Card', type: 'Credit', balance: -845.20, color: 'var(--danger)' },
-        { id: 4, name: 'Investment Portfolio', type: 'Investment', balance: 45200.75, color: 'var(--accent)' }
+        { id: 1, name: 'Main Account', type: 'Checking', balance: 0.00, color: 'var(--primary)' }
     ],
-    
-    transactions: [
-        { id: 1, date: '2026-04-18', merchant: 'Whole Foods Market', category: 'Groceries', amount: -142.50, accountId: 3, status: 'Completed' },
-        { id: 2, date: '2026-04-17', merchant: 'NexCorp Salary', category: 'Income', amount: 3200.00, accountId: 1, status: 'Completed' },
-        { id: 3, date: '2026-04-16', merchant: 'Netflix Subscription', category: 'Entertainment', amount: -15.99, accountId: 3, status: 'Completed' },
-        { id: 4, date: '2026-04-15', merchant: 'PG&E Utilities', category: 'Bills', amount: -85.20, accountId: 1, status: 'Completed' },
-        { id: 5, date: '2026-04-14', merchant: 'Shell Gas Station', category: 'Transport', amount: -45.00, accountId: 3, status: 'Completed' },
-        { id: 6, date: '2026-04-12', merchant: 'Apple Store', category: 'Electronics', amount: -999.00, accountId: 3, status: 'Completed' },
-        { id: 7, date: '2026-04-10', merchant: 'Vanguard Index Fund', category: 'Investment', amount: -500.00, accountId: 1, status: 'Completed' },
-        { id: 8, date: '2026-04-08', merchant: 'Uber Rides', category: 'Transport', amount: -24.50, accountId: 3, status: 'Completed' },
-    ],
-
-    budgets: [
-        { id: 1, category: 'Groceries', spent: 450, limit: 600, color: 'var(--success)' },
-        { id: 2, category: 'Entertainment', spent: 120, limit: 150, color: 'var(--accent)' },
-        { id: 3, category: 'Transport', spent: 180, limit: 200, color: 'var(--warning)' },
-        { id: 4, category: 'Shopping', spent: 340, limit: 300, color: 'var(--danger)' }
-    ],
-    
-    loans: [
-        { id: 1, person: 'Alex Smith', type: 'given', amount: 500, settledAmount: 100, status: 'active', date: '2026-04-10' },
-        { id: 2, person: 'Sarah Jenkins', type: 'received', amount: 200, settledAmount: 200, status: 'settled', date: '2026-03-15' }
-    ]
+    transactions: [],
+    budgets: [],
+    loans: []
 };
 
+const savedData = localStorage.getItem('nexfinance_data');
+const appData = savedData ? JSON.parse(savedData) : defaultData;
+
 const DataManager = {
+    saveData: () => {
+        localStorage.setItem('nexfinance_data', JSON.stringify(appData));
+    },
+
     getNetWorth: () => {
         const accountBalance = appData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
         const loansGivenBalance = appData.loans.filter(l => l.type === 'given').reduce((sum, l) => sum + (l.amount - l.settledAmount), 0);
@@ -81,6 +66,8 @@ const DataManager = {
         if (account) {
             account.balance += parseFloat(transaction.amount);
         }
+        
+        DataManager.saveData();
     },
 
     getLoans: () => {
@@ -103,6 +90,8 @@ const DataManager = {
             accountId: accountId,
             status: 'Completed'
         });
+        
+        DataManager.saveData();
     },
     
     recordLoanRepayment: (loanId, amount, accountId) => {
@@ -125,5 +114,7 @@ const DataManager = {
             accountId: accountId,
             status: 'Completed'
         });
+        
+        DataManager.saveData();
     }
 };

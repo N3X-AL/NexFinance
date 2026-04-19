@@ -240,6 +240,8 @@ class App {
                 color: colorMap[type] || 'var(--primary)'
             });
             
+            DataManager.saveData();
+            
             this.navigate(this.currentRoute);
             return true;
         });
@@ -451,12 +453,11 @@ class App {
         if (this.currentRoute === 'transactions' || this.currentRoute === 'dashboard') {
             this.navigate(this.currentRoute);
         }
-        
         alert(`Successfully imported ${importedCount} transactions from SQLite!`);
     }
 
     parseCSV(text) {
-        const lines = text.split(/\\r?\\n/);
+        const lines = text.split(/\r?\n/);
         if (lines.length < 2) {
             alert('File seems empty or invalid.');
             return;
@@ -526,6 +527,13 @@ class App {
         }
         
         alert(`Successfully imported ${importedCount} transactions from Everplan/CSV!`);
+    }
+
+    resetData() {
+        if (confirm("Are you sure you want to completely delete all your data? This cannot be undone.")) {
+            localStorage.removeItem('nexfinance_data');
+            window.location.reload();
+        }
     }
 }
 
