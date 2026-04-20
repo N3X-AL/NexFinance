@@ -1,4 +1,41 @@
-Views.settings = () => `
+Views.settings = () => {
+    let currencies = [];
+    if (typeof Intl !== 'undefined' && Intl.supportedValuesOf) {
+        try {
+            const codes = Intl.supportedValuesOf('currency');
+            currencies = codes.map(code => {
+                const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: code, maximumFractionDigits: 0 });
+                const parts = formatter.formatToParts(0);
+                const symbolPart = parts.find(p => p.type === 'currency');
+                const symbol = symbolPart ? symbolPart.value : code;
+                return { code, label: `${code} (${symbol})` };
+            });
+        } catch (e) {
+            console.warn('Could not generate dynamic currencies', e);
+        }
+    }
+    
+    if (currencies.length === 0) {
+        // Fallback to basic list if API is unavailable
+        currencies = [
+            { code: 'USD', label: 'USD ($)' },
+            { code: 'EUR', label: 'EUR (€)' },
+            { code: 'GBP', label: 'GBP (£)' },
+            { code: 'JPY', label: 'JPY (¥)' },
+            { code: 'INR', label: 'INR (₹)' },
+            { code: 'CAD', label: 'CAD ($)' },
+            { code: 'AUD', label: 'AUD ($)' },
+            { code: 'CHF', label: 'CHF (CHF)' },
+            { code: 'CNY', label: 'CNY (¥)' }
+        ];
+    }
+
+    const currentCurrency = DataManager.getCurrency();
+    const currencyOptions = currencies.map(c => 
+        `<option value="${c.code}" ${c.code === currentCurrency ? 'selected' : ''}>${c.label}</option>`
+    ).join('');
+
+    return `
     <div class="card animate-slide-up" style="max-width: 600px; margin: 0 auto;">
         <div class="card-header">
             <h3 class="card-title">Data Management</h3>
@@ -19,8 +56,44 @@ Views.settings = () => `
         <hr style="border: none; border-top: 1px solid var(--border); margin: 24px 0;">
         
         <div>
+            <h4 style="margin-bottom: 12px;">Cloud Sync (GitHub Gist)</h4>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Sync your data securely across multiple devices using a GitHub Personal Access Token. This creates a secret Gist on your account.</p>
+            
+            <div class="form-group">
+                <label class="form-label">GitHub Personal Access Token (classic, with 'gist' scope)</label>
+                <input type="password" id="gh-token-input" class="form-control" placeholder="ghp_..." value="${CloudSync.getToken()}">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Gist ID (Leave empty to create a new one)</label>
+                <input type="text" id="gh-gist-input" class="form-control" placeholder="Optional for new setups" value="${CloudSync.getGistId()}">
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">If you already synced on another device, paste the Gist ID here.</p>
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button class="btn btn-primary" onclick="app.connectCloudSync()" id="sync-connect-btn">
+                    <span class="material-icons-round">cloud_sync</span> ${CloudSync.getGistId() ? 'Force Sync & Save' : 'Connect & Create Gist'}
+                </button>
+                ${CloudSync.getGistId() ? `<button class="btn btn-secondary" onclick="app.disconnectCloudSync()"><span class="material-icons-round">link_off</span> Disconnect</button>` : ''}
+            </div>
+            <p style="font-size: 13px; color: var(--success); margin-top: 12px; display: none;" id="sync-status">Syncing...</p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 24px 0;">
+
+        <div>
             <h4 style="margin-bottom: 12px;">App Preferences</h4>
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
+                <div>
+                    <div style="font-weight: 500;">Currency</div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">Select your preferred currency</div>
+                </div>
+                <select class="form-control" style="width: 120px;" onchange="app.changeCurrency(this.value)">
+                    ${currencyOptions}
+                </select>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--border-light);">
                 <div>
                     <div style="font-weight: 500;">Dark Mode</div>
                     <div style="font-size: 13px; color: var(--text-secondary);">Toggle application theme</div>
@@ -37,4 +110,5 @@ Views.settings = () => `
             </div>
         </div>
     </div>
-`;
+    `;
+};

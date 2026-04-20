@@ -5,15 +5,129 @@ const defaultData = {
     ],
     transactions: [],
     budgets: [],
-    loans: []
+    loans: [],
+    currency: 'USD'
 };
 
 const savedData = localStorage.getItem('nexfinance_data');
 const appData = savedData ? JSON.parse(savedData) : defaultData;
+if (!appData.currency) appData.currency = 'USD';
+
+const CloudSync = {
+    getToken: () => localStorage.getItem('nexfinance_gh_token') || '',
+    getGistId: () => localStorage.getItem('nexfinance_gh_gist_id') || '',
+    setCredentials: (token, gistId) => {
+        if (token) localStorage.setItem('nexfinance_gh_token', token);
+        else localStorage.removeItem('nexfinance_gh_token');
+        
+        if (gistId) localStorage.setItem('nexfinance_gh_gist_id', gistId);
+        else localStorage.removeItem('nexfinance_gh_gist_id');
+    },
+    
+    isConfigured: () => !!CloudSync.getToken(),
+
+    pushToGist: async (dataObj) => {
+        const token = CloudSync.getToken();
+        const gistId = CloudSync.getGistId();
+        if (!token) return;
+
+        const content = JSON.stringify(dataObj, null, 2);
+        
+        try {
+            if (!gistId) {
+                const res = await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        description: 'NexFinance Data Sync',
+                        public: false,
+                        files: {
+                            'nexfinance_data.json': { content }
+                        }
+                    })
+                });
+                if (!res.ok) throw new Error('Failed to create gist');
+                const data = await res.json();
+                CloudSync.setCredentials(token, data.id);
+                return data.id;
+            } else {
+                const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        files: {
+                            'nexfinance_data.json': { content }
+                        }
+                    })
+                });
+                if (!res.ok) throw new Error('Failed to update gist');
+                return gistId;
+            }
+        } catch (err) {
+            console.error("CloudSync Push Error:", err);
+            throw err;
+        }
+    },
+
+    pullFromGist: async () => {
+        const token = CloudSync.getToken();
+        const gistId = CloudSync.getGistId();
+        if (!token || !gistId) return null;
+
+        try {
+            const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                }
+            });
+            if (!res.ok) throw new Error('Failed to fetch gist');
+            const data = await res.json();
+            const file = data.files['nexfinance_data.json'];
+            if (file && file.content) {
+                return JSON.parse(file.content);
+            }
+            return null;
+        } catch (err) {
+            console.error("CloudSync Pull Error:", err);
+            throw err;
+        }
+    }
+};
+
+let syncTimeout = null;
 
 const DataManager = {
     saveData: () => {
         localStorage.setItem('nexfinance_data', JSON.stringify(appData));
+        if (CloudSync.isConfigured()) {
+            clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                CloudSync.pushToGist(appData).catch(e => console.error("Auto-sync failed", e));
+            }, 2000);
+        }
+    },
+    
+    syncFromCloud: async () => {
+        if (CloudSync.isConfigured() && CloudSync.getGistId()) {
+            const remoteData = await CloudSync.pullFromGist();
+            if (remoteData) {
+                // Clear and overwrite appData keys
+                Object.keys(appData).forEach(k => delete appData[k]);
+                Object.assign(appData, remoteData);
+                localStorage.setItem('nexfinance_data', JSON.stringify(appData));
+                return true;
+            }
+        }
+        return false;
     },
 
     getNetWorth: () => {
@@ -47,9 +161,18 @@ const DataManager = {
     formatCurrency: (amount) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
-            currency: 'USD',
+            currency: appData.currency || 'USD',
             minimumFractionDigits: 2
         }).format(amount);
+    },
+
+    getCurrency: () => {
+        return appData.currency || 'USD';
+    },
+
+    setCurrency: (currency) => {
+        appData.currency = currency;
+        DataManager.saveData();
     },
 
     formatDate: (dateString) => {
@@ -114,6 +237,27 @@ const DataManager = {
             accountId: accountId,
             status: 'Completed'
         });
+        
+        DataManager.saveData();
+    },
+    
+    editAccount: (id, updatedData) => {
+        const accountIndex = appData.accounts.findIndex(a => a.id === id);
+        if (accountIndex !== -1) {
+            appData.accounts[accountIndex] = { ...appData.accounts[accountIndex], ...updatedData };
+            DataManager.saveData();
+        }
+    },
+    
+    deleteAccount: (id) => {
+        // Remove the account
+        appData.accounts = appData.accounts.filter(a => a.id !== id);
+        
+        // Remove all transactions associated with this account
+        appData.transactions = appData.transactions.filter(t => t.accountId !== id);
+        
+        // Remove any loans associated with this account (if we were tracking them by account id exclusively)
+        // Since loans just generate transactions, removing the transactions above handles the ledger side.
         
         DataManager.saveData();
     }
