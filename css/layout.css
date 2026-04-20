@@ -260,7 +260,8 @@
         position: fixed;
         top: 0;
         left: 0;
-        height: 100vh;
+        height: 100dvh;
+        z-index: 100;
         transform: translateX(-100%);
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     }
@@ -317,12 +318,14 @@
 
 /* Extra small screens */
 @media (max-width: 480px) {
+    #global-add-btn .btn-text {
+        display: none;
+    }
+    
     #global-add-btn {
-        font-size: 0; /* Hide the text "New Transaction" */
         width: 40px;
         height: 40px;
         padding: 0;
-        justify-content: center;
         border-radius: 50%;
     }
     
