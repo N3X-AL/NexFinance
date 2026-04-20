@@ -149,6 +149,82 @@ const DataManager = {
             .reduce((sum, t) => sum + t.amount, 0));
     },
 
+    getTrendStats: () => {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+        const sixtyDaysAgo = new Date(now.getTime() - (60 * 24 * 60 * 60 * 1000));
+
+        let currentIncome = 0, currentExpense = 0, currentNet = 0;
+        let pastIncome = 0, pastExpense = 0, pastNet = 0;
+
+        appData.transactions.forEach(t => {
+            const d = new Date(t.date);
+            if (d >= thirtyDaysAgo) {
+                if (t.amount > 0 && t.category !== 'Loan') currentIncome += t.amount;
+                if (t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan') currentExpense += Math.abs(t.amount);
+                currentNet += t.amount;
+            } else if (d >= sixtyDaysAgo && d < thirtyDaysAgo) {
+                if (t.amount > 0 && t.category !== 'Loan') pastIncome += t.amount;
+                if (t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan') pastExpense += Math.abs(t.amount);
+                pastNet += t.amount;
+            }
+        });
+        
+        const calcPercent = (curr, past) => {
+            if (past === 0) return curr > 0 ? '+100%' : (curr < 0 ? '-100%' : '0%');
+            const pct = ((curr - past) / past) * 100;
+            return (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
+        };
+
+        return {
+            income: calcPercent(currentIncome, pastIncome),
+            expense: calcPercent(currentExpense, pastExpense),
+            netWorth: calcPercent(currentNet, pastNet)
+        };
+    },
+
+    getChartData: (type, months) => {
+        const labels = [];
+        const data = [];
+        const now = new Date();
+        
+        for (let i = months - 1; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            labels.push(d.toLocaleDateString('en-US', { month: 'short' }));
+            
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+            
+            let monthValue = 0;
+            
+            if (type === 'networth') {
+                let historicNetWorth = DataManager.getNetWorth();
+                appData.transactions.forEach(t => {
+                    const td = new Date(t.date);
+                    if (td > endOfMonth) {
+                        historicNetWorth -= t.amount;
+                    }
+                });
+                monthValue = historicNetWorth;
+            } else {
+                appData.transactions.forEach(t => {
+                    const td = new Date(t.date);
+                    if (td >= startOfMonth && td <= endOfMonth) {
+                        if (type === 'income' && t.amount > 0 && t.category !== 'Loan') {
+                            monthValue += t.amount;
+                        } else if (type === 'expense' && t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan') {
+                            monthValue += Math.abs(t.amount);
+                        }
+                    }
+                });
+            }
+            
+            data.push(monthValue);
+        }
+        
+        return { labels, data };
+    },
+
     getTransactions: (limit = null) => {
         const sorted = [...appData.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
         return limit ? sorted.slice(0, limit) : sorted;
