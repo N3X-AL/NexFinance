@@ -187,39 +187,63 @@ const DataManager = {
         const labels = [];
         const data = [];
         const now = new Date();
+        now.setHours(23, 59, 59, 999);
         
-        for (let i = months - 1; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            labels.push(d.toLocaleDateString('en-US', { month: 'short' }));
+        // Calculate the start date (X months ago)
+        const startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - months);
+        startDate.setHours(0, 0, 0, 0);
+
+        let currentDate = new Date(startDate);
+        
+        // Pre-calculate running net worth right before the start date
+        let runningNetWorth = DataManager.getNetWorth();
+        if (type === 'networth') {
+            appData.transactions.forEach(t => {
+                const td = new Date(t.date);
+                // Subtract any transactions that happened after the start date to work backwards
+                if (td >= startDate) {
+                    runningNetWorth -= t.amount;
+                }
+            });
+        }
+        
+        while (currentDate <= now) {
+            labels.push(currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
             
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+            const startOfDay = new Date(currentDate);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(currentDate);
+            endOfDay.setHours(23, 59, 59, 999);
             
-            let monthValue = 0;
+            let dayValue = 0;
             
             if (type === 'networth') {
-                let historicNetWorth = DataManager.getNetWorth();
+                // Add transactions for this specific day to the running net worth
                 appData.transactions.forEach(t => {
                     const td = new Date(t.date);
-                    if (td > endOfMonth) {
-                        historicNetWorth -= t.amount;
+                    if (td >= startOfDay && td <= endOfDay) {
+                        runningNetWorth += t.amount;
                     }
                 });
-                monthValue = historicNetWorth;
+                dayValue = runningNetWorth;
             } else {
                 appData.transactions.forEach(t => {
                     const td = new Date(t.date);
-                    if (td >= startOfMonth && td <= endOfMonth) {
+                    if (td >= startOfDay && td <= endOfDay) {
                         if (type === 'income' && t.amount > 0 && t.category !== 'Loan') {
-                            monthValue += t.amount;
+                            dayValue += t.amount;
                         } else if (type === 'expense' && t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan') {
-                            monthValue += Math.abs(t.amount);
+                            dayValue += Math.abs(t.amount);
                         }
                     }
                 });
             }
             
-            data.push(monthValue);
+            data.push(dayValue);
+            
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
         }
         
         return { labels, data };

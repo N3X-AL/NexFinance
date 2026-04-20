@@ -39,7 +39,8 @@ Views.dashboard = () => {
                         backgroundColor: bgColor,
                         borderWidth: 2,
                         pointBackgroundColor: lineColor,
-                        pointRadius: 4,
+                        pointRadius: chartData.data.length > 45 ? 0 : 3,
+                        pointHitRadius: 10,
                         pointHoverRadius: 6,
                         fill: true,
                         tension: 0.4
@@ -72,7 +73,11 @@ Views.dashboard = () => {
                         },
                         x: {
                             grid: { display: false },
-                            ticks: { color: textColor }
+                            ticks: { 
+                                color: textColor,
+                                maxTicksLimit: 8,
+                                maxRotation: 0
+                            }
                         }
                     }
                 }
