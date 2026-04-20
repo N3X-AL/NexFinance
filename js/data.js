@@ -5,11 +5,13 @@ const defaultData = {
     ],
     transactions: [],
     budgets: [],
-    loans: []
+    loans: [],
+    currency: 'USD'
 };
 
 const savedData = localStorage.getItem('nexfinance_data');
 const appData = savedData ? JSON.parse(savedData) : defaultData;
+if (!appData.currency) appData.currency = 'USD';
 
 const DataManager = {
     saveData: () => {
@@ -47,9 +49,18 @@ const DataManager = {
     formatCurrency: (amount) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
-            currency: 'USD',
+            currency: appData.currency || 'USD',
             minimumFractionDigits: 2
         }).format(amount);
+    },
+
+    getCurrency: () => {
+        return appData.currency || 'USD';
+    },
+
+    setCurrency: (currency) => {
+        appData.currency = currency;
+        DataManager.saveData();
     },
 
     formatDate: (dateString) => {

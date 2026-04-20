@@ -607,6 +607,11 @@ class App {
             window.location.reload();
         }
     }
+
+    changeCurrency(currency) {
+        DataManager.setCurrency(currency);
+        this.navigate(this.currentRoute);
+    }
 }
 
 // Initialize Application

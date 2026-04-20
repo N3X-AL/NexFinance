@@ -1,4 +1,41 @@
-Views.settings = () => `
+Views.settings = () => {
+    let currencies = [];
+    if (typeof Intl !== 'undefined' && Intl.supportedValuesOf) {
+        try {
+            const codes = Intl.supportedValuesOf('currency');
+            currencies = codes.map(code => {
+                const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: code, maximumFractionDigits: 0 });
+                const parts = formatter.formatToParts(0);
+                const symbolPart = parts.find(p => p.type === 'currency');
+                const symbol = symbolPart ? symbolPart.value : code;
+                return { code, label: `${code} (${symbol})` };
+            });
+        } catch (e) {
+            console.warn('Could not generate dynamic currencies', e);
+        }
+    }
+    
+    if (currencies.length === 0) {
+        // Fallback to basic list if API is unavailable
+        currencies = [
+            { code: 'USD', label: 'USD ($)' },
+            { code: 'EUR', label: 'EUR (€)' },
+            { code: 'GBP', label: 'GBP (£)' },
+            { code: 'JPY', label: 'JPY (¥)' },
+            { code: 'INR', label: 'INR (₹)' },
+            { code: 'CAD', label: 'CAD ($)' },
+            { code: 'AUD', label: 'AUD ($)' },
+            { code: 'CHF', label: 'CHF (CHF)' },
+            { code: 'CNY', label: 'CNY (¥)' }
+        ];
+    }
+
+    const currentCurrency = DataManager.getCurrency();
+    const currencyOptions = currencies.map(c => 
+        `<option value="${c.code}" ${c.code === currentCurrency ? 'selected' : ''}>${c.label}</option>`
+    ).join('');
+
+    return `
     <div class="card animate-slide-up" style="max-width: 600px; margin: 0 auto;">
         <div class="card-header">
             <h3 class="card-title">Data Management</h3>
@@ -22,6 +59,16 @@ Views.settings = () => `
             <h4 style="margin-bottom: 12px;">App Preferences</h4>
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
                 <div>
+                    <div style="font-weight: 500;">Currency</div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">Select your preferred currency</div>
+                </div>
+                <select class="form-control" style="width: 120px;" onchange="app.changeCurrency(this.value)">
+                    ${currencyOptions}
+                </select>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--border-light);">
+                <div>
                     <div style="font-weight: 500;">Dark Mode</div>
                     <div style="font-size: 13px; color: var(--text-secondary);">Toggle application theme</div>
                 </div>
@@ -37,4 +84,5 @@ Views.settings = () => `
             </div>
         </div>
     </div>
-`;
+    `;
+};
