@@ -253,3 +253,84 @@
 @media (max-width: 900px) {
     .col-span-3, .col-span-6 { grid-column: span 12; }
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    #sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        transform: translateX(-100%);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+    
+    #sidebar.sidebar-open {
+        transform: translateX(0);
+    }
+    
+    #mobile-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 90;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--transition);
+    }
+    
+    #mobile-overlay.active {
+        opacity: 1;
+        pointer-events: all;
+    }
+    
+    .mobile-menu-toggle {
+        display: block !important;
+    }
+    
+    .topbar {
+        padding: 0 16px;
+    }
+    
+    .page-title h2 {
+        font-size: 20px;
+    }
+    
+    .page-title p {
+        display: none; /* Hide subtitle to save space */
+    }
+    
+    .search-bar {
+        display: none; /* Hide search bar on small screens */
+    }
+    
+    .scrollable-content {
+        padding: 16px;
+        padding-bottom: 80px;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    #global-add-btn {
+        font-size: 0; /* Hide the text "New Transaction" */
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        justify-content: center;
+        border-radius: 50%;
+    }
+    
+    #global-add-btn .material-icons-round {
+        margin: 0;
+    }
+    
+    .grid-cols-2, .grid-cols-3, .grid-cols-4 {
+        grid-template-columns: 1fr;
+    }
+}

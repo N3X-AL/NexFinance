@@ -46,12 +46,40 @@ class App {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') this.closeModal();
         });
+        
+        // Mobile Menu Toggle
+        const menuBtn = document.getElementById('mobile-menu-btn');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('mobile-overlay');
+        
+        if (menuBtn && sidebar && overlay) {
+            menuBtn.addEventListener('click', () => {
+                sidebar.classList.add('sidebar-open');
+                overlay.classList.add('active');
+            });
+            
+            overlay.addEventListener('click', () => {
+                this.closeMobileMenu();
+            });
+        }
+    }
+    
+    closeMobileMenu() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('mobile-overlay');
+        if (sidebar && overlay) {
+            sidebar.classList.remove('sidebar-open');
+            overlay.classList.remove('active');
+        }
     }
 
     navigate(route) {
         if (!Views[route]) return;
         
         this.currentRoute = route;
+        
+        // Close mobile menu if open
+        this.closeMobileMenu();
         
         // Update Navigation UI
         this.navLinks.forEach(link => {
