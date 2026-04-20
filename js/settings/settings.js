@@ -56,6 +56,32 @@ Views.settings = () => {
         <hr style="border: none; border-top: 1px solid var(--border); margin: 24px 0;">
         
         <div>
+            <h4 style="margin-bottom: 12px;">Cloud Sync (GitHub Gist)</h4>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Sync your data securely across multiple devices using a GitHub Personal Access Token. This creates a secret Gist on your account.</p>
+            
+            <div class="form-group">
+                <label class="form-label">GitHub Personal Access Token (classic, with 'gist' scope)</label>
+                <input type="password" id="gh-token-input" class="form-control" placeholder="ghp_..." value="${CloudSync.getToken()}">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Gist ID (Leave empty to create a new one)</label>
+                <input type="text" id="gh-gist-input" class="form-control" placeholder="Optional for new setups" value="${CloudSync.getGistId()}">
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">If you already synced on another device, paste the Gist ID here.</p>
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button class="btn btn-primary" onclick="app.connectCloudSync()" id="sync-connect-btn">
+                    <span class="material-icons-round">cloud_sync</span> ${CloudSync.getGistId() ? 'Force Sync & Save' : 'Connect & Create Gist'}
+                </button>
+                ${CloudSync.getGistId() ? `<button class="btn btn-secondary" onclick="app.disconnectCloudSync()"><span class="material-icons-round">link_off</span> Disconnect</button>` : ''}
+            </div>
+            <p style="font-size: 13px; color: var(--success); margin-top: 12px; display: none;" id="sync-status">Syncing...</p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 24px 0;">
+
+        <div>
             <h4 style="margin-bottom: 12px;">App Preferences</h4>
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
                 <div>

@@ -14,6 +14,15 @@ class App {
         this.setupNavigation();
         this.setupGlobalEvents();
         this.navigate(this.currentRoute);
+        
+        // Background sync on startup
+        if (typeof CloudSync !== 'undefined' && CloudSync.isConfigured() && CloudSync.getGistId()) {
+            DataManager.syncFromCloud().then(synced => {
+                if (synced) {
+                    this.navigate(this.currentRoute);
+                }
+            }).catch(e => console.error("Startup sync failed", e));
+        }
     }
 
     setupNavigation() {
@@ -601,8 +610,28 @@ class App {
         alert(`Successfully imported ${importedCount} transactions from Everplan/CSV!`);
     }
 
-    resetData() {
+    async resetData() {
         if (confirm("Are you sure you want to completely delete all your data? This cannot be undone.")) {
+            // If connected to cloud, reset the cloud data to default as well
+            if (typeof CloudSync !== 'undefined' && CloudSync.isConfigured() && CloudSync.getGistId()) {
+                const defaultTemplate = {
+                    accounts: [
+                        { id: 1, name: 'Main Account', type: 'Checking', balance: 0.00, color: 'var(--primary)' }
+                    ],
+                    transactions: [],
+                    budgets: [],
+                    loans: [],
+                    currency: 'USD'
+                };
+                try {
+                    // Update the UI to show it's working since network request takes a second
+                    document.body.innerHTML = '<div style="display:flex;height:100vh;align-items:center;justify-content:center;color:white;">Resetting data everywhere...</div>';
+                    await CloudSync.pushToGist(defaultTemplate);
+                } catch (e) {
+                    console.error("Failed to reset cloud data", e);
+                }
+            }
+            
             localStorage.removeItem('nexfinance_data');
             window.location.reload();
         }
@@ -611,6 +640,63 @@ class App {
     changeCurrency(currency) {
         DataManager.setCurrency(currency);
         this.navigate(this.currentRoute);
+    }
+
+    async connectCloudSync() {
+        const token = document.getElementById('gh-token-input').value.trim();
+        const gistId = document.getElementById('gh-gist-input').value.trim();
+        const statusEl = document.getElementById('sync-status');
+        const btn = document.getElementById('sync-connect-btn');
+        
+        if (!token) {
+            alert('Please enter a GitHub Personal Access Token.');
+            return;
+        }
+
+        CloudSync.setCredentials(token, gistId);
+        
+        statusEl.style.display = 'block';
+        statusEl.style.color = 'var(--success)';
+        statusEl.textContent = 'Syncing...';
+        btn.disabled = true;
+
+        try {
+            if (gistId) {
+                // If ID is provided, try pulling first to merge/overwrite local
+                const success = await DataManager.syncFromCloud();
+                if (success) {
+                    statusEl.textContent = 'Successfully synced from Gist!';
+                } else {
+                    statusEl.textContent = 'Failed to pull from Gist. Check your ID.';
+                    statusEl.style.color = 'var(--danger)';
+                }
+            } else {
+                // No ID provided, create a new Gist from local data
+                const newGistId = await CloudSync.pushToGist(appData);
+                if (newGistId) {
+                    document.getElementById('gh-gist-input').value = newGistId;
+                    statusEl.textContent = 'Created new secret Gist successfully!';
+                } else {
+                    statusEl.textContent = 'Failed to push to Gist.';
+                    statusEl.style.color = 'var(--danger)';
+                }
+            }
+            
+            // Re-render settings after a short delay
+            setTimeout(() => this.navigate('settings'), 2000);
+        } catch (err) {
+            statusEl.textContent = 'Error: ' + err.message;
+            statusEl.style.color = 'var(--danger)';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    disconnectCloudSync() {
+        if (confirm("Are you sure you want to disconnect? Your data will remain in your local browser and on GitHub, but they will no longer sync.")) {
+            CloudSync.setCredentials('', '');
+            this.navigate('settings');
+        }
     }
 }
 
