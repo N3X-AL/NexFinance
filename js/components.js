@@ -22,20 +22,20 @@ const Components = {
         
         return `
             <tr>
-                <td>
+                <td data-label="Transaction">
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center;">
                             <span class="material-icons-round" style="color: ${account ? account.color : 'var(--text-secondary)'}">${t.amount > 0 ? 'arrow_downward' : 'arrow_upward'}</span>
                         </div>
                         <div>
-                            <div style="font-weight: 500;">${t.merchant}</div>
-                            <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">${DataManager.formatDate(t.date)}</div>
+                            <div style="font-weight: 500; text-align: left;">${t.merchant}</div>
+                            <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; text-align: left;">${DataManager.formatDate(t.date)}</div>
                         </div>
                     </div>
                 </td>
-                <td><span class="tag bg-primary-light">${t.category}</span></td>
-                <td>${account ? account.name : 'Unknown'}</td>
-                <td style="text-align: right; font-weight: 600;" class="${amountClass}">
+                <td data-label="Category"><span class="tag bg-primary-light">${t.category}</span></td>
+                <td data-label="Account">${account ? account.name : 'Unknown'}</td>
+                <td data-label="Amount" style="text-align: right; font-weight: 600;" class="${amountClass}">
                     <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px;">
                         <span>${amountPrefix}${DataManager.formatCurrency(Math.abs(t.amount))}</span>
                         <button class="icon-btn tooltip" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--danger);" data-tooltip="Delete" onclick="app.deleteTransaction(${t.id})">
