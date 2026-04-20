@@ -72,13 +72,21 @@
                 </button>
             </div>
         </nav>
+        
+        <!-- Mobile Overlay -->
+        <div id="mobile-overlay"></div>
 
         <!-- Main Content Area -->
         <main id="main-content">
             <header class="topbar">
-                <div class="page-title">
-                    <h2 id="current-page-title">Dashboard</h2>
-                    <p id="current-page-subtitle">Welcome back, here's your financial overview.</p>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <button class="icon-btn mobile-menu-toggle" id="mobile-menu-btn" style="display: none;">
+                        <span class="material-icons-round">menu</span>
+                    </button>
+                    <div class="page-title">
+                        <h2 id="current-page-title">Dashboard</h2>
+                        <p id="current-page-subtitle">Welcome back, here's your financial overview.</p>
+                    </div>
                 </div>
                 <div class="topbar-actions">
                     <div class="search-bar">
@@ -91,7 +99,7 @@
                     </button>
                     <button class="btn btn-primary" id="global-add-btn">
                         <span class="material-icons-round">add</span>
-                        New Transaction
+                        <span class="btn-text">New Transaction</span>
                     </button>
                 </div>
             </header>
