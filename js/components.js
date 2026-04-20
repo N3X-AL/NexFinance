@@ -36,7 +36,12 @@ const Components = {
                 <td><span class="tag bg-primary-light">${t.category}</span></td>
                 <td>${account ? account.name : 'Unknown'}</td>
                 <td style="text-align: right; font-weight: 600;" class="${amountClass}">
-                    ${amountPrefix}${DataManager.formatCurrency(Math.abs(t.amount))}
+                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px;">
+                        <span>${amountPrefix}${DataManager.formatCurrency(Math.abs(t.amount))}</span>
+                        <button class="icon-btn tooltip" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--danger);" data-tooltip="Delete" onclick="app.deleteTransaction(${t.id})">
+                            <span class="material-icons-round" style="font-size: 18px;">delete</span>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;

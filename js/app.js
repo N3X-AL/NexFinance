@@ -638,6 +638,14 @@ class App {
         alert(`Successfully imported ${importedCount} transactions from Everplan/CSV!`);
     }
 
+    deleteTransaction(id) {
+        if (confirm("Are you sure you want to delete this transaction? This action cannot be undone.")) {
+            if (DataManager.deleteTransaction(id)) {
+                this.navigate(this.currentRoute);
+            }
+        }
+    }
+
     async resetData() {
         if (confirm("Are you sure you want to completely delete all your data? This cannot be undone.")) {
             // If connected to cloud, reset the cloud data to default as well

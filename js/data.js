@@ -192,6 +192,21 @@ const DataManager = {
         
         DataManager.saveData();
     },
+    
+    deleteTransaction: (id) => {
+        const index = appData.transactions.findIndex(t => t.id === id);
+        if (index !== -1) {
+            const t = appData.transactions[index];
+            const account = appData.accounts.find(a => a.id === parseInt(t.accountId));
+            if (account) {
+                account.balance -= parseFloat(t.amount);
+            }
+            appData.transactions.splice(index, 1);
+            DataManager.saveData();
+            return true;
+        }
+        return false;
+    },
 
     getLoans: () => {
         return appData.loans;
