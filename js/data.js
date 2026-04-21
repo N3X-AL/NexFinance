@@ -559,3 +559,27 @@ document.addEventListener('blur', function(e) {
         DataManager.formatMathInput(e.target);
     }
 }, true);
+
+// One-time migration to set all existing transactions to April 21, 2026
+if (!appData?.migratedToApril21) {
+    if (appData && appData.transactions) {
+        appData.transactions.forEach(t => {
+            t.date = '2026-04-21';
+        });
+    }
+    if (appData && appData.loans) {
+        appData.loans.forEach(l => {
+            if (l.date) l.date = '2026-04-21';
+        });
+    }
+    if (appData) {
+        appData.migratedToApril21 = true;
+        
+        // Wait a tick for DataManager to be fully initialized before calling save
+        setTimeout(() => {
+            if (typeof DataManager !== 'undefined') {
+                DataManager.saveData();
+            }
+        }, 100);
+    }
+}

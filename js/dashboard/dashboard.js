@@ -15,7 +15,7 @@ Views.dashboard = () => {
         
         const ctx = document.getElementById('main-dashboard-chart').getContext('2d');
         let currentType = 'expense';
-        let currentMonths = 6;
+        let currentMonths = 1;
         let chartInstance = null;
         
         const renderChart = () => {
@@ -174,8 +174,8 @@ Views.dashboard = () => {
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
                                 <span class="material-icons-round text-secondary" style="font-size: 18px;">date_range</span>
-                                <input type="range" id="chart-months-slider" min="1" max="6" value="6" style="width: 100px; accent-color: var(--primary);">
-                                <span id="chart-months-label" style="font-weight: 600; width: 45px; text-align: right;">6 Mos</span>
+                                <input type="range" id="chart-months-slider" min="1" max="6" value="1" style="width: 100px; accent-color: var(--primary);">
+                                <span id="chart-months-label" style="font-weight: 600; width: 45px; text-align: right;">1 Mo</span>
                             </div>
                         </div>
                     </div>

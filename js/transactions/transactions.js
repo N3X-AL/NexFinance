@@ -35,11 +35,22 @@ Views.transactions = () => {
         
         let currentType = 'expense'; // 'expense' or 'income'
         let currentCategory = '';
+        let currentMonths = 1;
         let chartInstance = null;
         
         const renderCategoryChart = () => {
             const ctx = document.getElementById('category-chart-canvas').getContext('2d');
-            const dataToUse = regularTxs.filter(t => currentType === 'expense' ? t.amount < 0 : t.amount > 0);
+            
+            const now = new Date();
+            now.setHours(23, 59, 59, 999);
+            const startDate = new Date(now);
+            startDate.setMonth(startDate.getMonth() - currentMonths);
+            startDate.setHours(0, 0, 0, 0);
+            
+            const dataToUse = regularTxs.filter(t => {
+                if (new Date(t.date) < startDate) return false;
+                return currentType === 'expense' ? t.amount < 0 : t.amount > 0;
+            });
             
             // Get unique categories for this type that have data
             const categories = [...new Set(dataToUse.map(t => t.category))].filter(c => c);
@@ -142,6 +153,12 @@ Views.transactions = () => {
             renderCategoryChart();
         });
 
+        document.getElementById('tx-chart-months-slider').addEventListener('input', (e) => {
+            currentMonths = parseInt(e.target.value);
+            document.getElementById('tx-chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
+            renderCategoryChart();
+        });
+
     }, 50);
 
     return `
@@ -151,9 +168,16 @@ Views.transactions = () => {
                     <h3 class="card-title">Category Insights</h3>
                     <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Analyze trends and totals for specific categories</p>
                 </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-primary cat-type-tab" data-type="expense">Expense</button>
-                    <button class="btn btn-secondary cat-type-tab" data-type="income">Income</button>
+                <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary cat-type-tab" data-type="expense">Expense</button>
+                        <button class="btn btn-secondary cat-type-tab" data-type="income">Income</button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                        <span class="material-icons-round text-secondary" style="font-size: 18px;">date_range</span>
+                        <input type="range" id="tx-chart-months-slider" min="1" max="6" value="1" style="width: 100px; accent-color: var(--primary);">
+                        <span id="tx-chart-months-label" style="font-weight: 600; width: 45px; text-align: right;">1 Mo</span>
+                    </div>
                 </div>
             </div>
             <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: start; margin-top: 16px;">

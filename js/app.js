@@ -179,6 +179,10 @@ class App {
                     </select>
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" id="t-date" class="form-control" required value="${new Date().toISOString().split('T')[0]}">
+                </div>
+                <div class="form-group">
                     <label class="form-label">Merchant / Description</label>
                     <input type="text" id="t-merchant" class="form-control" placeholder="e.g. Amazon" required>
                 </div>
@@ -214,7 +218,7 @@ class App {
             if (type === 'expense') amount = -Math.abs(amount);
             
             const newTx = {
-                date: new Date().toISOString().split('T')[0],
+                date: document.getElementById('t-date').value,
                 merchant: document.getElementById('t-merchant').value,
                 category: document.getElementById('t-category').value,
                 amount: amount,
@@ -263,6 +267,10 @@ class App {
                     </select>
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" id="et-date" class="form-control" required value="${tx.date}">
+                </div>
+                <div class="form-group">
                     <label class="form-label">Merchant / Description</label>
                     <input type="text" id="et-merchant" class="form-control" value="${tx.merchant}" required>
                 </div>
@@ -298,7 +306,7 @@ class App {
             if (type === 'expense') amount = -Math.abs(amount);
             
             const updatedTx = {
-                date: tx.date,
+                date: document.getElementById('et-date').value,
                 merchant: document.getElementById('et-merchant').value,
                 category: document.getElementById('et-category').value,
                 amount: amount,
