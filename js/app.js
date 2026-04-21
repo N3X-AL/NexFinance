@@ -140,6 +140,10 @@ class App {
         this.modalContainer.innerHTML = modalHTML;
         
         document.getElementById('modal-save-btn').addEventListener('click', () => {
+            // Apply formatting and calculations before verifying
+            document.querySelectorAll('.math-input').forEach(input => {
+                DataManager.formatMathInput(input);
+            });
             if (onSave()) {
                 this.closeModal();
             }
@@ -180,11 +184,14 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
-                    <input type="number" id="t-amount" class="form-control" placeholder="0.00" step="0.01" required>
+                    <input type="text" inputmode="decimal" id="t-amount" class="form-control math-input" placeholder="e.g., 200+400" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Category</label>
-                    <input type="text" id="t-category" class="form-control" placeholder="e.g. Shopping" required>
+                    <input type="text" id="t-category" list="category-list" class="form-control" placeholder="Search or type a new category" required>
+                    <datalist id="category-list">
+                        ${DataManager.getCategories('expense').map(c => `<option value="${c}"></option>`).join('')}
+                    </datalist>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Account</label>
@@ -221,6 +228,19 @@ class App {
             this.navigate(this.currentRoute);
             return true;
         });
+
+        // Add dynamic category updating when type changes
+        setTimeout(() => {
+            const typeSelect = document.getElementById('t-type');
+            const dataList = document.getElementById('category-list');
+            if (typeSelect && dataList) {
+                typeSelect.addEventListener('change', () => {
+                    const categories = DataManager.getCategories(typeSelect.value);
+                    dataList.innerHTML = categories.map(c => `<option value="${c}"></option>`).join('');
+                    document.getElementById('t-category').value = '';
+                });
+            }
+        }, 10);
     }
 
     showAddAccountModal() {
@@ -242,7 +262,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Initial Balance</label>
-                    <input type="number" id="a-balance" class="form-control" placeholder="0.00" step="0.01" required>
+                    <input type="text" inputmode="decimal" id="a-balance" class="form-control math-input" placeholder="e.g., 1000 or 500*2" required>
                 </div>
             </form>
         `;
@@ -306,7 +326,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Current Balance</label>
-                    <input type="number" id="ea-balance" class="form-control" value="${account.balance}" step="0.01" required>
+                    <input type="text" inputmode="decimal" id="ea-balance" class="form-control math-input" value="${account.balance}" required>
                 </div>
                 <div style="margin-top: 24px; text-align: center;">
                     <button type="button" class="btn btn-danger" onclick="app.deleteAccount(${id})" style="width: 100%;">
@@ -356,7 +376,7 @@ class App {
         }
     }
 
-    showAddLoanModal(type) {
+    showAddLoanModal(type, prefillPerson = '') {
         const title = type === 'given' ? 'I Lent Money' : 'I Borrowed Money';
         const personLabel = type === 'given' ? 'Who did you lend to?' : 'Who did you borrow from?';
         const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
@@ -365,11 +385,11 @@ class App {
             <form id="add-loan-form">
                 <div class="form-group">
                     <label class="form-label">${personLabel}</label>
-                    <input type="text" id="l-person" class="form-control" placeholder="e.g. John Doe" required>
+                    <input type="text" id="l-person" class="form-control" placeholder="e.g. John Doe" value="${prefillPerson}" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
-                    <input type="number" id="l-amount" class="form-control" placeholder="0.00" step="0.01" required>
+                    <input type="text" inputmode="decimal" id="l-amount" class="form-control math-input" placeholder="e.g., 200+400" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Date</label>
@@ -405,6 +425,49 @@ class App {
         });
     }
 
+    showEditLoanModal(loanId) {
+        const loan = appData.loans.find(l => l.id === loanId);
+        if (!loan) return;
+
+        const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+
+        const content = `
+            <form id="edit-loan-form">
+                <div class="form-group">
+                    <label class="form-label">${loan.type === 'given' ? 'Lent to' : 'Borrowed from'}</label>
+                    <input type="text" id="e-person" class="form-control" value="${loan.person}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Total Loan Amount</label>
+                    <input type="text" inputmode="decimal" id="e-amount" class="form-control math-input" value="${loan.amount}" min="${loan.settledAmount}" required>
+                    <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Settled amount so far: ${DataManager.formatCurrency(loan.settledAmount)}</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Account (for any change in amount)</label>
+                    <select id="e-account" class="form-control">
+                        ${accountOptions}
+                    </select>
+                </div>
+            </form>
+        `;
+
+        this.showModal('Edit Loan Details', content, () => {
+            const form = document.getElementById('edit-loan-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            const person = document.getElementById('e-person').value;
+            const amount = parseFloat(document.getElementById('e-amount').value);
+            const accountId = parseInt(document.getElementById('e-account').value);
+
+            DataManager.updateLoan(loanId, { person, amount }, accountId);
+            this.navigate(this.currentRoute);
+            return true;
+        });
+    }
+
     showRecordRepaymentModal(loanId) {
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
@@ -416,7 +479,7 @@ class App {
             <form id="record-repayment-form">
                 <div class="form-group">
                     <label class="form-label">Amount to Record</label>
-                    <input type="number" id="r-amount" class="form-control" value="${remaining}" max="${remaining}" step="0.01" required>
+                    <input type="text" inputmode="decimal" id="r-amount" class="form-control math-input" value="${remaining}" max="${remaining}" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Account (to receive/send funds)</label>
@@ -641,6 +704,14 @@ class App {
     deleteTransaction(id) {
         if (confirm("Are you sure you want to delete this transaction? This action cannot be undone.")) {
             if (DataManager.deleteTransaction(id)) {
+                this.navigate(this.currentRoute);
+            }
+        }
+    }
+
+    deleteLoan(id) {
+        if (confirm("Are you sure you want to delete this loan? This will permanently delete ALL transaction history associated with this loan and adjust your account balances accordingly.")) {
+            if (DataManager.deleteLoan(id)) {
                 this.navigate(this.currentRoute);
             }
         }

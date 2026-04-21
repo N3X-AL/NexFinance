@@ -1,5 +1,6 @@
 Views.dashboard = () => {
     const netWorth = DataManager.getNetWorth();
+    const moneyInHand = DataManager.getMoneyInHand();
     const income = DataManager.getMonthlyIncome();
     const expenses = DataManager.getMonthlyExpenses();
     const recentTransactions = DataManager.getTransactions(5);
@@ -22,18 +23,23 @@ Views.dashboard = () => {
             let lineColor, bgColor;
             if (currentType === 'expense') { lineColor = '#ef4444'; bgColor = 'rgba(239, 68, 68, 0.1)'; }
             else if (currentType === 'income') { lineColor = '#10b981'; bgColor = 'rgba(16, 185, 129, 0.1)'; }
+            else if (currentType === 'moneyinhand') { lineColor = '#f59e0b'; bgColor = 'rgba(245, 158, 11, 0.1)'; }
             else { lineColor = '#6366f1'; bgColor = 'rgba(99, 102, 241, 0.1)'; }
 
             if (chartInstance) {
                 chartInstance.destroy();
             }
 
+            let chartLabel = currentType.charAt(0).toUpperCase() + currentType.slice(1);
+            if (currentType === 'networth') chartLabel = 'Net Worth';
+            if (currentType === 'moneyinhand') chartLabel = 'Money in Hand';
+
             chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: chartData.labels,
                     datasets: [{
-                        label: currentType === 'networth' ? 'Net Worth' : currentType.charAt(0).toUpperCase() + currentType.slice(1),
+                        label: chartLabel,
                         data: chartData.data,
                         borderColor: lineColor,
                         backgroundColor: bgColor,
@@ -116,13 +122,16 @@ Views.dashboard = () => {
     return `
         <div class="dashboard-grid">
             <!-- Stats Row -->
-            <div class="col-span-4" style="animation-delay: 0.1s;">
+            <div class="col-span-3" style="animation-delay: 0.1s;">
                 ${Components.statCard('Net Worth', DataManager.formatCurrency(netWorth), trends.netWorth, 'account_balance_wallet', 'primary')}
             </div>
-            <div class="col-span-4" style="animation-delay: 0.2s;">
+            <div class="col-span-3" style="animation-delay: 0.15s;">
+                ${Components.statCard('Money in Hand', DataManager.formatCurrency(moneyInHand), trends.moneyInHand, 'payments', 'success')}
+            </div>
+            <div class="col-span-3" style="animation-delay: 0.2s;">
                 ${Components.statCard('Monthly Income', DataManager.formatCurrency(income), trends.income, 'arrow_downward', 'success')}
             </div>
-            <div class="col-span-4" style="animation-delay: 0.3s;">
+            <div class="col-span-3" style="animation-delay: 0.3s;">
                 ${Components.statCard('Monthly Expenses', DataManager.formatCurrency(expenses), trends.expense, 'arrow_upward', 'danger')}
             </div>
 
@@ -136,6 +145,7 @@ Views.dashboard = () => {
                                 <button class="btn chart-tab active" data-type="expense" style="padding: 6px 16px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md);">Expense</button>
                                 <button class="btn chart-tab" data-type="income" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Income</button>
                                 <button class="btn chart-tab" data-type="networth" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Net Worth</button>
+                                <button class="btn chart-tab" data-type="moneyinhand" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Money in Hand</button>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
                                 <span class="material-icons-round text-secondary" style="font-size: 18px;">date_range</span>

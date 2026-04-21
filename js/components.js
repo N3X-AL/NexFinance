@@ -137,16 +137,29 @@ const Components = {
                         <span style="font-size: 14px; color: var(--text-secondary);">Settled</span>
                         <span style="font-weight: 600;">${DataManager.formatCurrency(loan.settledAmount)} / ${DataManager.formatCurrency(loan.amount)}</span>
                     </div>
-                    <div class="progress-container">
+                    ${loan.status !== 'settled' ? `
+                    <div class="progress-container" style="margin-bottom: 12px;">
                         <div class="progress-bar" style="width: ${percentage}%; background: ${colorClass};"></div>
-                    </div>
+                    </div>` : ''}
                 </div>
                 
-                ${loan.status !== 'settled' ? `
-                    <button class="btn btn-secondary" style="width: 100%; margin-top: 8px;" onclick="app.showRecordRepaymentModal(${loan.id})">
-                        <span class="material-icons-round" style="font-size: 18px;">payments</span> Record Repayment
+                <div style="display: flex; gap: 8px; justify-content: space-between; align-items: stretch; height: 38px;">
+                    ${loan.status !== 'settled' ? `
+                        <button class="btn btn-secondary" style="flex: 1; padding: 8px; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="app.showRecordRepaymentModal(${loan.id})">
+                            <span class="material-icons-round" style="font-size: 18px;">payments</span> Record
+                        </button>
+                        <button class="btn btn-secondary" style="flex: none; width: 44px; padding: 8px; align-items: center; justify-content: center; display: flex; gap: 4px;" onclick="app.showEditLoanModal(${loan.id})" title="Edit Loan">
+                            <span class="material-icons-round" style="font-size: 18px;">edit</span>
+                        </button>
+                    ` : `
+                        <button class="btn btn-secondary" style="flex: 1; padding: 8px; align-items: center; justify-content: center; display: flex; gap: 4px;" onclick="app.showAddLoanModal('${loan.type}', '${loan.person.replace(/'/g, "\\'")}')" title="Start New Loan">
+                            <span class="material-icons-round" style="font-size: 18px;">add_circle</span> New Loan
+                        </button>
+                    `}
+                    <button class="btn btn-danger" style="flex: ${loan.status !== 'settled' ? 'none; width: 44px;' : '1'}; padding: 8px; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none; align-items: center; justify-content: center; display: flex; gap: 4px;" onclick="app.deleteLoan(${loan.id})" title="Delete Loan & History">
+                        <span class="material-icons-round" style="font-size: 18px;">delete</span> ${loan.status === 'settled' ? 'Delete History' : ''}
                     </button>
-                ` : ''}
+                </div>
             </div>
         `;
     }
