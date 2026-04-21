@@ -3,8 +3,12 @@ Views.dashboard = () => {
     const moneyInHand = DataManager.getMoneyInHand();
     const income = DataManager.getMonthlyIncome();
     const expenses = DataManager.getMonthlyExpenses();
-    const recentTransactions = DataManager.getTransactions(5);
+    const recentTransactions = DataManager.getRegularTransactions(5);
+    const recentLoans = DataManager.getLoanTransactions(5);
     const trends = DataManager.getTrendStats();
+
+    const regularTxHTML = recentTransactions.length > 0 ? Components.transactionTable(recentTransactions) : Components.emptyState('receipt_long', 'No transactions yet', 'Your recent transactions will appear here once you add them.');
+    const loanTxHTML = recentLoans.length > 0 ? Components.transactionTable(recentLoans) : Components.emptyState('handshake', 'No loan transactions', 'Your recent loan activities will appear here.');
 
     setTimeout(() => {
         if (!document.getElementById('main-dashboard-chart')) return;
@@ -117,6 +121,27 @@ Views.dashboard = () => {
             renderChart();
         });
 
+        document.querySelectorAll('.dashboard-tx-tab').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.dashboard-tx-tab').forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--text-secondary)';
+                });
+                
+                const target = e.currentTarget;
+                target.style.background = 'var(--primary)';
+                target.style.color = 'white';
+                
+                const type = target.getAttribute('data-type');
+                const container = document.getElementById('dashboard-tx-container');
+                if (type === 'regular') {
+                    container.innerHTML = regularTxHTML;
+                } else {
+                    container.innerHTML = loanTxHTML;
+                }
+            });
+        });
+
     }, 100);
 
     return `
@@ -163,11 +188,19 @@ Views.dashboard = () => {
             <!-- Main Content Row -->
             <div class="col-span-8 animate-slide-up" style="animation-delay: 0.4s;">
                 <div class="card" style="height: 100%;">
-                    <div class="card-header">
-                        <h3 class="card-title">Recent Transactions</h3>
+                    <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <h3 class="card-title">Recent Transactions</h3>
+                            <div style="display: flex; gap: 8px; margin-top: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border); width: fit-content;">
+                                <button class="dashboard-tx-tab" data-type="regular" style="padding: 4px 12px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer;">Regular</button>
+                                <button class="dashboard-tx-tab" data-type="loans" style="padding: 4px 12px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer;">Loans</button>
+                            </div>
+                        </div>
                         <button class="btn btn-secondary" onclick="app.navigate('transactions')">View All</button>
                     </div>
-                    ${recentTransactions.length > 0 ? Components.transactionTable(recentTransactions) : Components.emptyState('receipt_long', 'No transactions yet', 'Your recent transactions will appear here once you add them.')}
+                    <div id="dashboard-tx-container">
+                        ${regularTxHTML}
+                    </div>
                 </div>
             </div>
 

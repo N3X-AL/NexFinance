@@ -276,6 +276,16 @@ const DataManager = {
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
+    getRegularTransactions: (limit = null) => {
+        const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement').sort((a, b) => new Date(b.date) - new Date(a.date));
+        return limit ? sorted.slice(0, limit) : sorted;
+    },
+
+    getLoanTransactions: (limit = null) => {
+        const sorted = [...appData.transactions].filter(t => t.category === 'Loan' || t.category === 'Loan Settlement').sort((a, b) => new Date(b.date) - new Date(a.date));
+        return limit ? sorted.slice(0, limit) : sorted;
+    },
+
     getAccountById: (id) => {
         return appData.accounts.find(a => a.id === id);
     },
@@ -338,6 +348,31 @@ const DataManager = {
                 account.balance -= parseFloat(t.amount);
             }
             appData.transactions.splice(index, 1);
+            DataManager.saveData();
+            return true;
+        }
+        return false;
+    },
+
+    editTransaction: (id, updatedTransaction) => {
+        const index = appData.transactions.findIndex(t => t.id === id);
+        if (index !== -1) {
+            const oldT = appData.transactions[index];
+            
+            // Revert old transaction effect
+            const oldAccount = appData.accounts.find(a => a.id === parseInt(oldT.accountId));
+            if (oldAccount) {
+                oldAccount.balance -= parseFloat(oldT.amount);
+            }
+            
+            // Apply new transaction effect
+            const newAccount = appData.accounts.find(a => a.id === parseInt(updatedTransaction.accountId));
+            if (newAccount) {
+                newAccount.balance += parseFloat(updatedTransaction.amount);
+            }
+            
+            // Update transaction data
+            appData.transactions[index] = { ...oldT, ...updatedTransaction };
             DataManager.saveData();
             return true;
         }

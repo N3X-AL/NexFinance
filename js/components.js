@@ -38,9 +38,14 @@ const Components = {
                 <td data-label="Amount" style="text-align: right; font-weight: 600;" class="${amountClass}">
                     <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px;">
                         <span>${amountPrefix}${DataManager.formatCurrency(Math.abs(t.amount))}</span>
-                        <button class="icon-btn tooltip" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--danger);" data-tooltip="Delete" onclick="app.deleteTransaction(${t.id})">
-                            <span class="material-icons-round" style="font-size: 18px;">delete</span>
-                        </button>
+                        <div style="display: flex; gap: 4px;">
+                            <button class="icon-btn tooltip" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--text-secondary);" data-tooltip="Edit" onclick="app.showEditTransactionModal(${t.id})">
+                                <span class="material-icons-round" style="font-size: 18px;">edit</span>
+                            </button>
+                            <button class="icon-btn tooltip" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--danger);" data-tooltip="Delete" onclick="app.deleteTransaction(${t.id})">
+                                <span class="material-icons-round" style="font-size: 18px;">delete</span>
+                            </button>
+                        </div>
                     </div>
                 </td>
             </tr>

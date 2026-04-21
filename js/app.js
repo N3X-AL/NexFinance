@@ -243,6 +243,87 @@ class App {
         }, 10);
     }
 
+    showEditTransactionModal(id) {
+        const tx = appData.transactions.find(t => t.id === id);
+        if (!tx) return;
+
+        const isExpense = tx.amount < 0;
+        const absAmount = Math.abs(tx.amount);
+        
+        const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === tx.accountId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const initialCategories = DataManager.getCategories(isExpense ? 'expense' : 'income');
+        
+        const content = `
+            <form id="edit-transaction-form">
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+                    <select id="et-type" class="form-control">
+                        <option value="expense" ${isExpense ? 'selected' : ''}>Expense</option>
+                        <option value="income" ${!isExpense ? 'selected' : ''}>Income</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Merchant / Description</label>
+                    <input type="text" id="et-merchant" class="form-control" value="${tx.merchant}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Amount</label>
+                    <input type="text" inputmode="decimal" id="et-amount" class="form-control math-input" value="${absAmount}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <input type="text" id="et-category" list="et-category-list" class="form-control" value="${tx.category}" required>
+                    <datalist id="et-category-list">
+                        ${initialCategories.map(c => `<option value="${c}"></option>`).join('')}
+                    </datalist>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Account</label>
+                    <select id="et-account" class="form-control">
+                        ${accountOptions}
+                    </select>
+                </div>
+            </form>
+        `;
+        
+        this.showModal('Edit Transaction', content, () => {
+            const form = document.getElementById('edit-transaction-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+            
+            const type = document.getElementById('et-type').value;
+            let amount = parseFloat(document.getElementById('et-amount').value);
+            if (type === 'expense') amount = -Math.abs(amount);
+            
+            const updatedTx = {
+                date: tx.date,
+                merchant: document.getElementById('et-merchant').value,
+                category: document.getElementById('et-category').value,
+                amount: amount,
+                accountId: parseInt(document.getElementById('et-account').value),
+                status: tx.status
+            };
+            
+            DataManager.editTransaction(id, updatedTx);
+            
+            this.navigate(this.currentRoute);
+            return true;
+        });
+
+        setTimeout(() => {
+            const typeSelect = document.getElementById('et-type');
+            const dataList = document.getElementById('et-category-list');
+            if (typeSelect && dataList) {
+                typeSelect.addEventListener('change', () => {
+                    const categories = DataManager.getCategories(typeSelect.value);
+                    dataList.innerHTML = categories.map(c => `<option value="${c}"></option>`).join('');
+                });
+            }
+        }, 10);
+    }
+
     showAddAccountModal() {
         const content = `
             <form id="add-account-form">
