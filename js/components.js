@@ -117,54 +117,118 @@ const Components = {
         </div>
     `,
 
-    loanCard: (loan) => {
-        const percentage = Math.min((loan.settledAmount / loan.amount) * 100, 100);
-        const colorClass = loan.type === 'given' ? 'var(--warning)' : 'var(--accent)';
-        const typeText = loan.type === 'given' ? 'You lent to' : 'You borrowed from';
+    personLoanCard: (personData) => {
+        const { name, activeLoans, settledLoans, netBalance } = personData;
+        const safeId = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() + Math.floor(Math.random()*1000);
         
+        let headerText = 'All Settled';
+        let headerColor = 'var(--success)';
+        let headerIcon = 'check_circle';
+        let netAbs = Math.abs(netBalance);
+        
+        if (netBalance > 0) {
+            headerText = 'Total Loaned';
+            headerColor = 'var(--warning)';
+            headerIcon = 'arrow_upward';
+        } else if (netBalance < 0) {
+            headerText = 'Total Borrowed';
+            headerColor = 'var(--accent)';
+            headerIcon = 'arrow_downward';
+        }
+
+        const renderSubLoan = (loan, isSettled) => {
+            const percentage = Math.min((loan.settledAmount / loan.amount) * 100, 100);
+            const colorC = loan.type === 'given' ? 'var(--warning)' : 'var(--accent)';
+            return `
+                <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-size: 12px; font-weight: 500; color: ${colorC};">${loan.type === 'given' ? 'Lent / Paid for them' : 'Borrowed / Paid for you'}</div>
+                            ${loan.description ? `<div style="font-size: 12px; color: var(--text-primary); margin-top: 4px;">${loan.description}</div>` : ''}
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${DataManager.formatDate(loan.date)}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-weight: 600; font-size: 14px;">${DataManager.formatCurrency(isSettled ? loan.amount : loan.amount - loan.settledAmount)}</span>
+                            ${!isSettled ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Remaining of ${DataManager.formatCurrency(loan.amount)}</div>` : ''}
+                        </div>
+                    </div>
+                    ${!isSettled ? `
+                    <div class="progress-container" style="margin-bottom: 12px; height: 4px; background: rgba(0,0,0,0.2);">
+                        <div class="progress-bar" style="width: ${percentage}%; background: ${colorC};"></div>
+                    </div>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; gap: 4px;" onclick="app.showRecordRepaymentModal(${loan.id})">
+                            <span class="material-icons-round" style="font-size: 14px;">payments</span> Record
+                        </button>
+                        <button class="btn btn-secondary" style="padding: 6px; display: flex; align-items: center; justify-content: center;" onclick="app.showEditLoanModal(${loan.id})" title="Edit Loan">
+                            <span class="material-icons-round" style="font-size: 14px;">edit</span>
+                        </button>
+                        <button class="btn btn-danger" style="padding: 6px; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.deleteLoan(${loan.id})" title="Delete Loan & History">
+                            <span class="material-icons-round" style="font-size: 14px;">delete</span>
+                        </button>
+                    </div>` : `
+                    <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                        <span class="tag bg-success-light" style="font-size: 11px; padding: 2px 6px;">Settled</span>
+                        <button class="btn btn-danger" style="padding: 4px 6px; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.deleteLoan(${loan.id})" title="Delete Entry">
+                            <span class="material-icons-round" style="font-size: 14px;">delete</span>
+                        </button>
+                    </div>
+                    `}
+                </div>
+            `;
+        };
+
         return `
             <div class="card animate-slide-up" style="position: relative;">
-                ${loan.status === 'settled' ? '<div style="position: absolute; top: 12px; right: 12px;"><span class="tag bg-success-light">Settled</span></div>' : ''}
-                <div class="card-header" style="margin-bottom: 8px;">
+                ${netBalance === 0 && activeLoans.length === 0 ? '<div style="position: absolute; top: 12px; right: 12px;"><span class="tag bg-success-light">All Settled</span></div>' : ''}
+                
+                <div class="card-header" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; color: ${colorClass};">
-                            <span class="material-icons-round">${loan.type === 'given' ? 'arrow_upward' : 'arrow_downward'}</span>
+                        <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; color: ${headerColor};">
+                            <span class="material-icons-round">${headerIcon}</span>
                         </div>
                         <div>
-                            <div style="font-size: 13px; color: var(--text-secondary);">${typeText}</div>
-                            <h3 class="card-title" style="margin-top: 2px;">${loan.person}</h3>
+                            <h3 class="card-title" style="margin-top: 2px; font-size: 20px; font-weight: 600;">${name}</h3>
+                        </div>
+                    </div>
+                    ${netAbs > 0 ? `
+                    <div style="text-align: right;">
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 2px;">${headerText}</div>
+                        <div style="font-size: 16px; color: ${headerColor}; font-weight: 600;">${DataManager.formatCurrency(netAbs)}</div>
+                    </div>` : '<div style="text-align: right;"><div style="font-size: 14px; color: var(--text-secondary); font-weight: 500;">No active balance</div></div>'}
+                </div>
+                
+                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                     <button class="btn btn-secondary" style="flex: 1; padding: 8px 4px; font-size: 13px;" onclick="app.showAddLoanModal('given', '${name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">
+                        <span class="material-icons-round" style="font-size: 16px; margin-right: 4px; vertical-align: bottom;">arrow_upward</span>Lend
+                     </button>
+                     <button class="btn btn-secondary" style="flex: 1; padding: 8px 4px; font-size: 13px;" onclick="app.showAddLoanModal('received', '${name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">
+                         <span class="material-icons-round" style="font-size: 16px; margin-right: 4px; vertical-align: bottom;">arrow_downward</span>Borrow
+                     </button>
+                </div>
+
+                ${activeLoans.length > 0 ? `
+                <div>
+                    ${activeLoans.map(l => renderSubLoan(l, false)).join('')}
+                </div>
+                ` : ''}
+                
+                ${settledLoans.length > 0 ? `
+                <div style="margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                    <button class="btn btn-secondary" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: 13px; background: transparent; border: 1px solid var(--border-color);" onclick="document.getElementById('settled-${safeId}').style.display = document.getElementById('settled-${safeId}').style.display === 'none' ? 'block' : 'none'">
+                        <span>View Settled History (${settledLoans.length})</span>
+                        <span class="material-icons-round" style="font-size: 16px;">history</span>
+                    </button>
+                    <div id="settled-${safeId}" style="display: none;">
+                        ${settledLoans.map(l => renderSubLoan(l, true)).join('')}
+                        <div style="margin-top: 16px; text-align: center;">
+                            <button class="btn btn-danger" style="width: 100%; padding: 8px 12px; font-size: 13px; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.deletePersonHistory('${name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">
+                                <span class="material-icons-round" style="font-size: 16px; margin-right: 4px; vertical-align: bottom;">delete_forever</span> Delete All History for ${name}
+                            </button>
                         </div>
                     </div>
                 </div>
-                
-                <div style="margin: 20px 0;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="font-size: 14px; color: var(--text-secondary);">Settled</span>
-                        <span style="font-weight: 600;">${DataManager.formatCurrency(loan.settledAmount)} / ${DataManager.formatCurrency(loan.amount)}</span>
-                    </div>
-                    ${loan.status !== 'settled' ? `
-                    <div class="progress-container" style="margin-bottom: 12px;">
-                        <div class="progress-bar" style="width: ${percentage}%; background: ${colorClass};"></div>
-                    </div>` : ''}
-                </div>
-                
-                <div style="display: flex; gap: 8px; justify-content: space-between; align-items: stretch; height: 38px;">
-                    ${loan.status !== 'settled' ? `
-                        <button class="btn btn-secondary" style="flex: 1; padding: 8px; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="app.showRecordRepaymentModal(${loan.id})">
-                            <span class="material-icons-round" style="font-size: 18px;">payments</span> Record
-                        </button>
-                        <button class="btn btn-secondary" style="flex: none; width: 44px; padding: 8px; align-items: center; justify-content: center; display: flex; gap: 4px;" onclick="app.showEditLoanModal(${loan.id})" title="Edit Loan">
-                            <span class="material-icons-round" style="font-size: 18px;">edit</span>
-                        </button>
-                    ` : `
-                        <button class="btn btn-secondary" style="flex: 1; padding: 8px; align-items: center; justify-content: center; display: flex; gap: 4px;" onclick="app.showAddLoanModal('${loan.type}', '${loan.person.replace(/'/g, "\\'")}')" title="Start New Loan">
-                            <span class="material-icons-round" style="font-size: 18px;">add_circle</span> New Loan
-                        </button>
-                    `}
-                    <button class="btn btn-danger" style="flex: ${loan.status !== 'settled' ? 'none; width: 44px;' : '1'}; padding: 8px; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none; align-items: center; justify-content: center; display: flex; gap: 4px;" onclick="app.deleteLoan(${loan.id})" title="Delete Loan & History">
-                        <span class="material-icons-round" style="font-size: 18px;">delete</span> ${loan.status === 'settled' ? 'Delete History' : ''}
-                    </button>
-                </div>
+                ` : ''}
             </div>
         `;
     }

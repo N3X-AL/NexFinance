@@ -105,7 +105,7 @@ Views.transactions = () => {
                         borderWidth: 2,
                         pointBackgroundColor: currentType === 'expense' ? '#ef4444' : '#10b981',
                         fill: true,
-                        tension: 0.4
+                        tension: 0.2
                     }]
                 },
                 options: {

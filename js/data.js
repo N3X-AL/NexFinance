@@ -384,22 +384,57 @@ const DataManager = {
     },
     
     addLoan: (loan, accountId) => {
-        const newId = appData.loans.length > 0 ? Math.max(...appData.loans.map(l => l.id)) + 1 : 1;
-        appData.loans.push({ id: newId, settledAmount: 0, status: 'active', ...loan });
+        let remainingAmount = loan.amount;
+        const targetType = loan.type;
+        const oppositeType = targetType === 'given' ? 'received' : 'given';
         
-        // Disburse or receive the loan principal
-        const amount = loan.type === 'given' ? -Math.abs(loan.amount) : Math.abs(loan.amount);
-        const merchant = loan.type === 'given' ? 'Loan Given: ' + loan.person : 'Loan Received: ' + loan.person;
-        
-        DataManager.addTransaction({
-            date: loan.date,
-            merchant: merchant,
-            category: 'Loan',
-            amount: amount,
-            accountId: accountId,
-            status: 'Completed',
-            loanId: newId
-        });
+        // Auto offset active opposite-type loans for the same person
+        const oppositeLoans = appData.loans.filter(l => 
+            (l.person || '').toLowerCase() === (loan.person || '').toLowerCase() && 
+            l.type === oppositeType && 
+            l.status === 'active'
+        ).sort((a, b) => a.date.localeCompare(b.date));
+
+        for (const opLoan of oppositeLoans) {
+            if (remainingAmount <= 0) break;
+            
+            const opRemaining = opLoan.amount - opLoan.settledAmount;
+            const offset = Math.min(remainingAmount, opRemaining);
+            
+            const isDirectPayment = loan.settlementType === 'direct';
+            // Recording an auto-repayment. If the current new loan is direct payment, the offset is direct too.
+            DataManager.recordLoanRepayment(opLoan.id, offset, accountId, isDirectPayment, `Offset against new loan: ${loan.description || ''}`);
+            remainingAmount -= offset;
+        }
+
+        if (remainingAmount > 0) {
+            const newId = appData.loans.length > 0 ? Math.max(...appData.loans.map(l => l.id)) + 1 : 1;
+            const newLoan = { 
+                id: newId, 
+                settledAmount: 0, 
+                status: 'active', 
+                ...loan, 
+                amount: remainingAmount 
+            };
+            appData.loans.push(newLoan);
+            
+            // Disburse or receive the loan principal
+            if (loan.settlementType !== 'direct') {
+                const amount = targetType === 'given' ? -Math.abs(remainingAmount) : Math.abs(remainingAmount);
+                let merchant = targetType === 'given' ? 'Loan Given: ' + loan.person : 'Loan Received: ' + loan.person;
+                if (loan.description) merchant += ` (${loan.description})`;
+                
+                DataManager.addTransaction({
+                    date: loan.date,
+                    merchant: merchant,
+                    category: 'Loan',
+                    amount: amount,
+                    accountId: accountId,
+                    status: 'Completed',
+                    loanId: newId
+                });
+            }
+        }
         
         DataManager.saveData();
     },
@@ -407,16 +442,12 @@ const DataManager = {
     deleteLoan: (id) => {
         const index = appData.loans.findIndex(l => l.id === id);
         if (index !== -1) {
-            const loan = appData.loans[index];
             
             // Delete all associated transactions so history and balances are reverted
             const txsToDelete = appData.transactions.filter(t => 
-                t.category === 'Loan' && 
-                (t.loanId === id || t.merchant.toLowerCase().includes(loan.person.toLowerCase()))
+                t.category === 'Loan' && t.loanId === id
             );
             
-            // Delete backwards so splices in deleteTransaction don't mess up array if we were looping directly, 
-            // though we have IDs now so it's safe, but deleteTransaction takes id.
             txsToDelete.forEach(t => {
                 DataManager.deleteTransaction(t.id);
             });
@@ -428,6 +459,22 @@ const DataManager = {
         return false;
     },
 
+    deletePersonHistory: (personName) => {
+        const loansToDelete = appData.loans.filter(l => (l.person || '').toLowerCase() === personName.toLowerCase());
+        
+        loansToDelete.forEach(loan => {
+            const txsToDelete = appData.transactions.filter(t => t.category === 'Loan' && t.loanId === loan.id);
+            txsToDelete.forEach(t => {
+                DataManager.deleteTransaction(t.id);
+            });
+            const index = appData.loans.findIndex(l => l.id === loan.id);
+            if (index !== -1) appData.loans.splice(index, 1);
+        });
+        
+        DataManager.saveData();
+        return true;
+    },
+
     updateLoan: (loanId, newData, accountId) => {
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
@@ -435,6 +482,7 @@ const DataManager = {
         const amountDiff = newData.amount - loan.amount;
 
         loan.person = newData.person;
+        loan.description = newData.description;
         loan.amount = newData.amount;
 
         // Reset status if they increased the amount beyond settled
@@ -468,27 +516,51 @@ const DataManager = {
         DataManager.saveData();
     },
 
-    recordLoanRepayment: (loanId, amount, accountId) => {
+    recordLoanRepayment: (loanId, amount, accountId, isDirectPayment = false, description = '') => {
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
         
-        loan.settledAmount += amount;
+        const remaining = loan.amount - loan.settledAmount;
+        let actualRepayment = amount;
+        let overpaidAmount = 0;
+        
+        if (amount > remaining) {
+            actualRepayment = remaining;
+            overpaidAmount = amount - remaining;
+        }
+
+        loan.settledAmount += actualRepayment;
         if (loan.settledAmount >= loan.amount) {
             loan.status = 'settled';
         }
         
-        const txAmount = loan.type === 'given' ? Math.abs(amount) : -Math.abs(amount);
-        const merchant = loan.type === 'given' ? 'Loan Repayment From: ' + loan.person : 'Loan Repayment To: ' + loan.person;
+        if (!isDirectPayment) {
+            const txAmount = loan.type === 'given' ? Math.abs(actualRepayment) : -Math.abs(actualRepayment);
+            let merchant = loan.type === 'given' ? 'Loan Repayment From: ' + loan.person : 'Loan Repayment To: ' + loan.person;
+            if (description) merchant += ` (${description})`;
+            
+            DataManager.addTransaction({
+                date: new Date().toISOString().split('T')[0],
+                merchant: merchant,
+                category: 'Loan',
+                amount: txAmount,
+                accountId: accountId,
+                status: 'Completed',
+                loanId: loanId
+            });
+        }
         
-        DataManager.addTransaction({
-            date: new Date().toISOString().split('T')[0],
-            merchant: merchant,
-            category: 'Loan',
-            amount: txAmount,
-            accountId: accountId,
-            status: 'Completed',
-            loanId: loanId
-        });
+        if (overpaidAmount > 0) {
+            const newType = loan.type === 'given' ? 'received' : 'given';
+            DataManager.addLoan({
+                person: loan.person,
+                amount: overpaidAmount,
+                type: newType,
+                date: new Date().toISOString().split('T')[0],
+                description: description || `Overpayment from loan #${loan.id}`,
+                settlementType: isDirectPayment ? 'direct' : 'cash'
+            }, accountId);
+        }
         
         DataManager.saveData();
     },

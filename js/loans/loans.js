@@ -55,10 +55,36 @@ Views.loans = () => {
             </div>
         </div>
         
-        ${loans.length > 0 ? `
-            <div class="grid-cols-3">
-                ${loans.map(l => Components.loanCard(l)).join('')}
-            </div>
-        ` : Components.emptyState('handshake', 'No Active Loans', 'Keep track of money you have lent to or borrowed from friends and family without messing up your main budget.')}
+        ${(function() {
+            if (loans.length === 0) return Components.emptyState('handshake', 'No Active Loans', 'Keep track of money you have lent to or borrowed from friends and family without messing up your main budget.');
+            
+            const personGroups = {};
+            loans.forEach(l => {
+                const key = l.person.toLowerCase();
+                if (!personGroups[key]) {
+                    personGroups[key] = {
+                        name: l.person,
+                        activeLoans: [],
+                        settledLoans: [],
+                        netBalance: 0
+                    };
+                }
+                
+                if (l.status === 'settled') {
+                    personGroups[key].settledLoans.push(l);
+                } else {
+                    personGroups[key].activeLoans.push(l);
+                    personGroups[key].netBalance += (l.type === 'given' ? (l.amount - l.settledAmount) : -(l.amount - l.settledAmount));
+                }
+            });
+            
+            const persons = Object.values(personGroups).sort((a, b) => Math.abs(b.netBalance) - Math.abs(a.netBalance));
+            
+            return `
+                <div class="grid-cols-3">
+                    ${persons.map(p => Components.personLoanCard(p)).join('')}
+                </div>
+            `;
+        })()}
     `;
 };

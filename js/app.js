@@ -466,8 +466,8 @@ class App {
     }
 
     showAddLoanModal(type, prefillPerson = '') {
-        const title = type === 'given' ? 'I Lent Money' : 'I Borrowed Money';
-        const personLabel = type === 'given' ? 'Who did you lend to?' : 'Who did you borrow from?';
+        const title = type === 'given' ? 'I Lent Money / Paid for someone' : 'I Borrowed Money / Someone paid for me';
+        const personLabel = type === 'given' ? 'Who did you lend to or pay for?' : 'Who did you borrow from or who paid for you?';
         const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
 
         const content = `
@@ -475,6 +475,10 @@ class App {
                 <div class="form-group">
                     <label class="form-label">${personLabel}</label>
                     <input type="text" id="l-person" class="form-control" placeholder="e.g. John Doe" value="${prefillPerson}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description / What is it about?</label>
+                    <input type="text" id="l-description" class="form-control" placeholder="e.g., Dinner, Rent, Cash loan" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
@@ -485,6 +489,13 @@ class App {
                     <input type="date" id="l-date" class="form-control" value="${new Date().toISOString().split('T')[0]}" required>
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Settlement Type</label>
+                    <select id="l-settlement" class="form-control" onchange="document.getElementById('loan-account-group').style.display = this.value === 'direct' ? 'none' : 'block'">
+                        <option value="cash">Money transferred to/from my account</option>
+                        <option value="direct">They paid directly / No money touched my account</option>
+                    </select>
+                </div>
+                <div class="form-group" id="loan-account-group">
                     <label class="form-label">Account (for the transfer)</label>
                     <select id="l-account" class="form-control">
                         ${accountOptions}
@@ -502,10 +513,14 @@ class App {
 
             const loan = {
                 person: document.getElementById('l-person').value,
+                description: document.getElementById('l-description').value,
                 amount: parseFloat(document.getElementById('l-amount').value),
                 date: document.getElementById('l-date').value,
-                type: type
+                type: type,
+                settlementType: document.getElementById('l-settlement').value
             };
+            
+            // if direct payment, account isn't used, but we still pass one so it doesn't break.
             const accountId = parseInt(document.getElementById('l-account').value);
 
             DataManager.addLoan(loan, accountId);
@@ -525,6 +540,10 @@ class App {
                 <div class="form-group">
                     <label class="form-label">${loan.type === 'given' ? 'Lent to' : 'Borrowed from'}</label>
                     <input type="text" id="e-person" class="form-control" value="${loan.person}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <input type="text" id="e-description" class="form-control" value="${loan.description || ''}">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Total Loan Amount</label>
@@ -548,10 +567,11 @@ class App {
             }
 
             const person = document.getElementById('e-person').value;
+            const description = document.getElementById('e-description').value;
             const amount = parseFloat(document.getElementById('e-amount').value);
             const accountId = parseInt(document.getElementById('e-account').value);
 
-            DataManager.updateLoan(loanId, { person, amount }, accountId);
+            DataManager.updateLoan(loanId, { person, description, amount }, accountId);
             this.navigate(this.currentRoute);
             return true;
         });
@@ -568,9 +588,20 @@ class App {
             <form id="record-repayment-form">
                 <div class="form-group">
                     <label class="form-label">Amount to Record</label>
-                    <input type="text" inputmode="decimal" id="r-amount" class="form-control math-input" value="${remaining}" max="${remaining}" required>
+                    <input type="text" inputmode="decimal" id="r-amount" class="form-control math-input" value="${remaining}" required>
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Description (Optional)</label>
+                    <input type="text" id="r-description" class="form-control" placeholder="e.g. Paid in cash, offset">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Settlement Type</label>
+                    <select id="r-settlement" class="form-control" onchange="document.getElementById('repay-account-group').style.display = this.value === 'direct' ? 'none' : 'block'">
+                        <option value="cash">Money transferred to/from my account</option>
+                        <option value="direct">They paid directly / No account transfer</option>
+                    </select>
+                </div>
+                <div class="form-group" id="repay-account-group">
                     <label class="form-label">Account (to receive/send funds)</label>
                     <select id="r-account" class="form-control">
                         ${accountOptions}
@@ -588,8 +619,10 @@ class App {
 
             const amount = parseFloat(document.getElementById('r-amount').value);
             const accountId = parseInt(document.getElementById('r-account').value);
+            const isDirectPayment = document.getElementById('r-settlement').value === 'direct';
+            const description = document.getElementById('r-description').value;
 
-            DataManager.recordLoanRepayment(loanId, amount, accountId);
+            DataManager.recordLoanRepayment(loanId, amount, accountId, isDirectPayment, description);
             this.navigate(this.currentRoute);
             return true;
         });
@@ -801,6 +834,14 @@ class App {
     deleteLoan(id) {
         if (confirm("Are you sure you want to delete this loan? This will permanently delete ALL transaction history associated with this loan and adjust your account balances accordingly.")) {
             if (DataManager.deleteLoan(id)) {
+                this.navigate(this.currentRoute);
+            }
+        }
+    }
+
+    deletePersonHistory(personName) {
+        if (confirm(`Are you sure you want to completely delete ALL loan history for ${personName}? This will remove all active and settled loans and their associated transactions, adjusting your account balances accordingly.`)) {
+            if (DataManager.deletePersonHistory(personName)) {
                 this.navigate(this.currentRoute);
             }
         }

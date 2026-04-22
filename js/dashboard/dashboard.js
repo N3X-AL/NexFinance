@@ -53,7 +53,7 @@ Views.dashboard = () => {
                         pointHitRadius: 10,
                         pointHoverRadius: 6,
                         fill: true,
-                        tension: 0.4
+                        tension: 0.2
                     }]
                 },
                 options: {
