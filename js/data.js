@@ -272,17 +272,29 @@ const DataManager = {
     },
 
     getTransactions: (limit = null) => {
-        const sorted = [...appData.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+        const sorted = [...appData.transactions].sort((a, b) => {
+            const dateDiff = new Date(b.date) - new Date(a.date);
+            if (dateDiff !== 0) return dateDiff;
+            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        });
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
     getRegularTransactions: (limit = null) => {
-        const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement').sort((a, b) => new Date(b.date) - new Date(a.date));
+        const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement').sort((a, b) => {
+            const dateDiff = new Date(b.date) - new Date(a.date);
+            if (dateDiff !== 0) return dateDiff;
+            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        });
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
     getLoanTransactions: (limit = null) => {
-        const sorted = [...appData.transactions].filter(t => t.category === 'Loan' || t.category === 'Loan Settlement').sort((a, b) => new Date(b.date) - new Date(a.date));
+        const sorted = [...appData.transactions].filter(t => t.category === 'Loan' || t.category === 'Loan Settlement').sort((a, b) => {
+            const dateDiff = new Date(b.date) - new Date(a.date);
+            if (dateDiff !== 0) return dateDiff;
+            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        });
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
@@ -328,7 +340,7 @@ const DataManager = {
 
     addTransaction: (transaction) => {
         const newId = appData.transactions.length > 0 ? Math.max(...appData.transactions.map(t => t.id)) + 1 : 1;
-        appData.transactions.push({ id: newId, ...transaction });
+        appData.transactions.push({ id: newId, createdAt: new Date().toISOString(), ...transaction });
         
         // Update account balance
         const account = appData.accounts.find(a => a.id === parseInt(transaction.accountId));
