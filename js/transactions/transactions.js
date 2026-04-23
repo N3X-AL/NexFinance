@@ -1,40 +1,14 @@
 Views.transactions = () => {
     const regularTxs = DataManager.getRegularTransactions();
-    const loanTxs = DataManager.getLoanTransactions();
 
     const regularHTML = regularTxs.length > 0 ? Components.transactionTable(regularTxs) : Components.emptyState('receipt_long', 'No transactions yet', 'Start adding your income and expenses to track your finances.');
-    const loanHTML = loanTxs.length > 0 ? Components.transactionTable(loanTxs) : Components.emptyState('handshake', 'No loan entries yet', 'Your borrow and lend history will appear here.');
 
     setTimeout(() => {
-        // Tab switching
-        document.querySelectorAll('.tx-page-tab').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.tx-page-tab').forEach(b => {
-                    b.classList.remove('active-tab');
-                    b.style.color = 'var(--text-secondary)';
-                    b.style.borderBottom = 'none';
-                });
-                
-                const target = e.currentTarget;
-                target.classList.add('active-tab');
-                target.style.color = 'var(--primary)';
-                target.style.borderBottom = '2px solid var(--primary)';
-                
-                const type = target.getAttribute('data-type');
-                const container = document.getElementById('transactions-page-container');
-                if (type === 'regular') {
-                    container.innerHTML = regularHTML;
-                } else {
-                    container.innerHTML = loanHTML;
-                }
-            });
-        });
-
         // Category Chart Logic
         if (!document.getElementById('category-chart-canvas')) return;
         
         let currentType = 'expense'; // 'expense' or 'income'
-        let currentCategory = '';
+        let currentCategory = 'all';
         let currentMonths = 1;
         let chartInstance = null;
         
@@ -55,17 +29,18 @@ Views.transactions = () => {
             // Get unique categories for this type that have data
             const categories = [...new Set(dataToUse.map(t => t.category))].filter(c => c);
             
-            // Populate category select if empty
+            // Populate category select if needed
             const catSelect = document.getElementById('cat-chart-select');
-            if (catSelect.children.length === 0 || catSelect.dataset.renderedType !== currentType) {
-                catSelect.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
-                if (categories.length > 0) {
-                    currentCategory = categories[0];
-                } else {
-                    currentCategory = '';
-                    catSelect.innerHTML = '<option value="">No data</option>';
-                }
+            if (catSelect.dataset.renderedType !== currentType) {
+                catSelect.innerHTML = '<option value="all">All</option>' + categories.map(c => `<option value="${c}">${c}</option>`).join('');
                 catSelect.dataset.renderedType = currentType;
+                // Restore selection if still valid, else reset to 'all'
+                if (currentCategory !== 'all' && categories.includes(currentCategory)) {
+                    catSelect.value = currentCategory;
+                } else {
+                    currentCategory = 'all';
+                    catSelect.value = 'all';
+                }
             } else {
                 currentCategory = catSelect.value;
             }
@@ -74,9 +49,20 @@ Views.transactions = () => {
             let chartDataPoints = [];
             let totalAmount = 0;
             
-            if (currentCategory) {
+            if (currentCategory === 'all') {
+                // Group all transactions by date
+                const grouped = {};
+                dataToUse.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(t => {
+                    const amt = Math.abs(t.amount);
+                    totalAmount += amt;
+                    const d = new Date(t.date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+                    grouped[d] = (grouped[d] || 0) + amt;
+                });
+                chartLabels = Object.keys(grouped);
+                chartDataPoints = Object.values(grouped);
+            } else {
                 // Group by date for the selected category
-                const catTxs = dataToUse.filter(t => t.category === currentCategory).sort((a,b) => new Date(a.date) - new Date(b.date));
+                const catTxs = dataToUse.filter(t => t.category === currentCategory).sort((a, b) => new Date(a.date) - new Date(b.date));
                 const grouped = {};
                 catTxs.forEach(t => {
                     const amt = Math.abs(t.amount);
@@ -84,12 +70,20 @@ Views.transactions = () => {
                     const d = new Date(t.date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
                     grouped[d] = (grouped[d] || 0) + amt;
                 });
-                
                 chartLabels = Object.keys(grouped);
                 chartDataPoints = Object.values(grouped);
             }
             
-            document.getElementById('cat-total-amount').textContent = currentCategory ? DataManager.formatCurrency(totalAmount) : '$0.00';
+            document.getElementById('cat-total-amount').textContent = DataManager.formatCurrency(totalAmount);
+            
+            // Filter transactions list
+            const container = document.getElementById('transactions-page-container');
+            if (currentCategory === 'all') {
+                container.innerHTML = regularHTML;
+            } else {
+                const filtered = regularTxs.filter(t => t.category === currentCategory && (currentType === 'expense' ? t.amount < 0 : t.amount > 0));
+                container.innerHTML = filtered.length > 0 ? Components.transactionTable(filtered) : Components.emptyState('receipt_long', 'No transactions', `No ${currentType} transactions for "${currentCategory}".`);
+            }
             
             if (chartInstance) chartInstance.destroy();
             
@@ -98,7 +92,7 @@ Views.transactions = () => {
                 data: {
                     labels: chartLabels,
                     datasets: [{
-                        label: currentCategory,
+                        label: currentCategory === 'all' ? 'All' : currentCategory,
                         data: chartDataPoints,
                         borderColor: currentType === 'expense' ? '#ef4444' : '#10b981',
                         backgroundColor: currentType === 'expense' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
@@ -144,6 +138,10 @@ Views.transactions = () => {
                 target.classList.add('btn-primary');
                 
                 currentType = target.getAttribute('data-type');
+                // Reset dropdown so it repopulates for the new type
+                const catSelect = document.getElementById('cat-chart-select');
+                catSelect.dataset.renderedType = '';
+                currentCategory = 'all';
                 renderCategoryChart();
             });
         });
@@ -184,6 +182,7 @@ Views.transactions = () => {
                 <div style="flex: 1; min-width: 200px;">
                     <div style="margin-bottom: 12px; color: var(--text-secondary); font-size: 14px;">Select Category</div>
                     <select id="cat-chart-select" class="form-input" style="width: 100%; appearance: auto; background-color: var(--bg-surface-solid); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 12px; color: var(--text-primary); outline: none;">
+                        <option value="all">All</option>
                     </select>
                     
                     <div style="margin-top: 24px;">
@@ -202,14 +201,8 @@ Views.transactions = () => {
                 <div style="display: flex; justify-content: space-between; width: 100%;">
                     <h3 class="card-title">All Transactions</h3>
                     <div style="display: flex; gap: 12px;">
-                        <button class="btn btn-secondary"><span class="material-icons-round" style="font-size: 18px;">filter_list</span> Filter</button>
                         <button class="btn btn-secondary"><span class="material-icons-round" style="font-size: 18px;">download</span> Export</button>
                     </div>
-                </div>
-                
-                <div class="tabs" style="display: flex; gap: 24px; border-bottom: 1px solid var(--border-light); width: 100%;">
-                    <button class="tx-page-tab active-tab" data-type="regular" style="border: none; background: transparent; padding: 8px 4px; color: var(--primary); font-weight: 500; cursor: pointer; border-bottom: 2px solid var(--primary); font-size: 15px;">Regular Transactions</button>
-                    <button class="tx-page-tab" data-type="loans" style="border: none; background: transparent; padding: 8px 4px; color: var(--text-secondary); font-weight: 500; cursor: pointer; font-size: 15px;">Loan Entries</button>
                 </div>
             </div>
             <div id="transactions-page-container">
@@ -218,3 +211,4 @@ Views.transactions = () => {
         </div>
     `;
 };
+
