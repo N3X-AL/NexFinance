@@ -470,6 +470,15 @@ class App {
         const personLabel = type === 'given' ? 'Who did you lend to or pay for?' : 'Who did you borrow from or who paid for you?';
         const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
 
+        const settlementField = type === 'received' ? `
+                <div class="form-group">
+                    <label class="form-label">Settlement Type</label>
+                    <select id="l-settlement" class="form-control" onchange="document.getElementById('loan-account-group').style.display = this.value === 'direct' ? 'none' : 'block'">
+                        <option value="cash">They gave me money (added to my account)</option>
+                        <option value="direct">They paid for something on my behalf (no cash received)</option>
+                    </select>
+                </div>` : '';
+
         const content = `
             <form id="add-loan-form">
                 <div class="form-group">
@@ -488,13 +497,7 @@ class App {
                     <label class="form-label">Date</label>
                     <input type="date" id="l-date" class="form-control" value="${new Date().toISOString().split('T')[0]}" required>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Settlement Type</label>
-                    <select id="l-settlement" class="form-control" onchange="document.getElementById('loan-account-group').style.display = this.value === 'direct' ? 'none' : 'block'">
-                        <option value="cash">Money transferred to/from my account</option>
-                        <option value="direct">They paid directly / No money touched my account</option>
-                    </select>
-                </div>
+                ${settlementField}
                 <div class="form-group" id="loan-account-group">
                     <label class="form-label">Account (for the transfer)</label>
                     <select id="l-account" class="form-control">
@@ -511,13 +514,15 @@ class App {
                 return false;
             }
 
+            const settlementEl = document.getElementById('l-settlement');
             const loan = {
                 person: document.getElementById('l-person').value,
                 description: document.getElementById('l-description').value,
                 amount: parseFloat(document.getElementById('l-amount').value),
                 date: document.getElementById('l-date').value,
                 type: type,
-                settlementType: document.getElementById('l-settlement').value
+                // Lending always deducts from the account; settlement type only applies when borrowing
+                settlementType: settlementEl ? settlementEl.value : 'cash'
             };
             
             // if direct payment, account isn't used, but we still pass one so it doesn't break.
