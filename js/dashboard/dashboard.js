@@ -4,11 +4,26 @@ Views.dashboard = () => {
     const income = DataManager.getMonthlyIncome();
     const expenses = DataManager.getMonthlyExpenses();
     const recentTransactions = DataManager.getRegularTransactions(5);
-    const recentLoans = DataManager.getLoanTransactions(5);
     const trends = DataManager.getTrendStats();
 
     const regularTxHTML = recentTransactions.length > 0 ? Components.transactionTable(recentTransactions) : Components.emptyState('receipt_long', 'No transactions yet', 'Your recent transactions will appear here once you add them.');
-    const loanTxHTML = recentLoans.length > 0 ? Components.transactionTable(recentLoans) : Components.emptyState('handshake', 'No loan transactions', 'Your recent loan activities will appear here.');
+
+    const loanTxHTML = (() => {
+        const loans = DataManager.getLoans();
+        const personGroups = {};
+        loans.forEach(l => {
+            if (l.status === 'settled') return;
+            const key = l.person.toLowerCase();
+            if (!personGroups[key]) {
+                personGroups[key] = { name: l.person, activeLoans: [], settledLoans: [], netBalance: 0 };
+            }
+            personGroups[key].activeLoans.push(l);
+            personGroups[key].netBalance += (l.type === 'given' ? (l.amount - l.settledAmount) : -(l.amount - l.settledAmount));
+        });
+        const persons = Object.values(personGroups).sort((a, b) => Math.abs(b.netBalance) - Math.abs(a.netBalance));
+        if (persons.length === 0) return Components.emptyState('handshake', 'No active loans', 'Your active loans will appear here.');
+        return `<div style="display: flex; flex-direction: column; gap: 16px;">${persons.map(p => Components.personLoanCard(p)).join('')}</div>`;
+    })();
 
     setTimeout(() => {
         if (!document.getElementById('main-dashboard-chart')) return;
