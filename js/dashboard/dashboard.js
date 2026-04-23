@@ -15,14 +15,30 @@ Views.dashboard = () => {
             if (l.status === 'settled') return;
             const key = l.person.toLowerCase();
             if (!personGroups[key]) {
-                personGroups[key] = { name: l.person, activeLoans: [], settledLoans: [], netBalance: 0 };
+                personGroups[key] = { name: l.person, netBalance: 0 };
             }
-            personGroups[key].activeLoans.push(l);
             personGroups[key].netBalance += (l.type === 'given' ? (l.amount - l.settledAmount) : -(l.amount - l.settledAmount));
         });
         const persons = Object.values(personGroups).sort((a, b) => Math.abs(b.netBalance) - Math.abs(a.netBalance));
         if (persons.length === 0) return Components.emptyState('handshake', 'No active loans', 'Your active loans will appear here.');
-        return `<div style="display: flex; flex-direction: column; gap: 16px;">${persons.map(p => Components.personLoanCard(p)).join('')}</div>`;
+        return `<div style="display: flex; flex-direction: column; gap: 0;">
+            ${persons.map(p => {
+                const isLoaned = p.netBalance > 0;
+                const color = isLoaned ? 'var(--warning)' : 'var(--accent)';
+                const label = isLoaned ? 'Loaned' : 'Borrowed';
+                return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border-light);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 36px; height: 36px; border-radius: var(--radius-full); background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; color: ${color};">${p.name.charAt(0).toUpperCase()}</div>
+                        <span style="font-weight: 500;">${p.name}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: 600; color: ${color};">${DataManager.formatCurrency(Math.abs(p.netBalance))}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">${label}</div>
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>`;
     })();
 
     setTimeout(() => {
