@@ -1,3 +1,5 @@
+let _transactionsDocClickHandler = null;
+
 Views.transactions = () => {
     const regularTxs = DataManager.getRegularTransactions();
 
@@ -20,10 +22,11 @@ Views.transactions = () => {
             if (currentCategory === 'all') {
                 container.innerHTML = regularHTML;
             } else {
+                const safeCategory = currentCategory.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 const filtered = regularTxs.filter(t => t.category === currentCategory && (currentType === 'expense' ? t.amount < 0 : t.amount > 0));
                 container.innerHTML = filtered.length > 0
                     ? Components.transactionTable(filtered)
-                    : Components.emptyState('receipt_long', 'No transactions', `No ${currentType} transactions for "${currentCategory}".`);
+                    : Components.emptyState('receipt_long', 'No transactions', `No ${currentType} transactions for "${safeCategory}".`);
             }
         };
         
@@ -97,8 +100,9 @@ Views.transactions = () => {
             if (currentCategory === 'all') {
                 container.innerHTML = regularHTML;
             } else {
+                const safeCategory = currentCategory.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 const filtered = regularTxs.filter(t => t.category === currentCategory && (currentType === 'expense' ? t.amount < 0 : t.amount > 0));
-                container.innerHTML = filtered.length > 0 ? Components.transactionTable(filtered) : Components.emptyState('receipt_long', 'No transactions', `No ${currentType} transactions for "${currentCategory}".`);
+                container.innerHTML = filtered.length > 0 ? Components.transactionTable(filtered) : Components.emptyState('receipt_long', 'No transactions', `No ${currentType} transactions for "${safeCategory}".`);
             }
             
             if (chartInstance) chartInstance.destroy();
@@ -167,13 +171,16 @@ Views.transactions = () => {
         const onDocClick = (e) => {
             const canvas = document.getElementById('category-chart-canvas');
             if (!canvas) {
-                document.removeEventListener('click', onDocClick);
+                document.removeEventListener('click', _transactionsDocClickHandler);
+                _transactionsDocClickHandler = null;
                 return;
             }
             if (!canvas.contains(e.target) && isDateFiltered) {
                 restoreTransactionView();
             }
         };
+        if (_transactionsDocClickHandler) document.removeEventListener('click', _transactionsDocClickHandler);
+        _transactionsDocClickHandler = onDocClick;
         document.addEventListener('click', onDocClick);
         
         document.querySelectorAll('.cat-type-tab').forEach(btn => {

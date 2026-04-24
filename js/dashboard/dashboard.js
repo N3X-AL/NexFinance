@@ -1,3 +1,5 @@
+let _dashboardDocClickHandler = null;
+
 Views.dashboard = () => {
     const netWorth = DataManager.getNetWorth();
     const moneyInHand = DataManager.getMoneyInHand();
@@ -165,13 +167,16 @@ Views.dashboard = () => {
         const onDocClick = (e) => {
             const canvas = document.getElementById('main-dashboard-chart');
             if (!canvas) {
-                document.removeEventListener('click', onDocClick);
+                document.removeEventListener('click', _dashboardDocClickHandler);
+                _dashboardDocClickHandler = null;
                 return;
             }
             if (!canvas.contains(e.target) && isDateFiltered) {
                 restoreDashboardTx();
             }
         };
+        if (_dashboardDocClickHandler) document.removeEventListener('click', _dashboardDocClickHandler);
+        _dashboardDocClickHandler = onDocClick;
         document.addEventListener('click', onDocClick);
 
         // Bind events
