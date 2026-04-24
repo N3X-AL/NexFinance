@@ -347,6 +347,14 @@ const DataManager = {
         if (account) {
             account.balance += parseFloat(transaction.amount);
         }
+
+        // For transfers: also credit the destination account
+        if (transaction.toAccountId) {
+            const toAccount = appData.accounts.find(a => a.id === parseInt(transaction.toAccountId));
+            if (toAccount) {
+                toAccount.balance -= parseFloat(transaction.amount);
+            }
+        }
         
         DataManager.saveData();
     },
@@ -358,6 +366,13 @@ const DataManager = {
             const account = appData.accounts.find(a => a.id === parseInt(t.accountId));
             if (account) {
                 account.balance -= parseFloat(t.amount);
+            }
+            // For transfers: also reverse the destination account credit
+            if (t.toAccountId) {
+                const toAccount = appData.accounts.find(a => a.id === parseInt(t.toAccountId));
+                if (toAccount) {
+                    toAccount.balance += parseFloat(t.amount);
+                }
             }
             appData.transactions.splice(index, 1);
             DataManager.saveData();
@@ -587,19 +602,11 @@ const DataManager = {
 
         DataManager.addTransaction({
             date: date,
-            merchant: `Transfer to ${toAccount.name}${description}`,
+            merchant: `Transfer: ${fromAccount.name} → ${toAccount.name}${description}`,
             category: 'Transfer',
             amount: -transferAmount,
             accountId: fromAccountId,
-            status: 'Completed'
-        });
-
-        DataManager.addTransaction({
-            date: date,
-            merchant: `Transfer from ${fromAccount.name}${description}`,
-            category: 'Transfer',
-            amount: transferAmount,
-            accountId: toAccountId,
+            toAccountId: toAccountId,
             status: 'Completed'
         });
 
