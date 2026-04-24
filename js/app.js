@@ -42,6 +42,11 @@ class App {
             globalAddBtn.addEventListener('click', () => this.showAddTransactionModal());
         }
 
+        const globalTransferBtn = document.getElementById('global-transfer-btn');
+        if (globalTransferBtn) {
+            globalTransferBtn.addEventListener('click', () => this.showTransferFundsModal());
+        }
+
         // Close modal on escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') this.closeModal();
@@ -330,6 +335,87 @@ class App {
                 });
             }
         }, 10);
+    }
+
+    showTransferFundsModal(prefillFromId = null) {
+        if (appData.accounts.length < 2) {
+            alert('You need at least two accounts to transfer funds.');
+            return;
+        }
+
+        const accountOptions = (excludeId) => appData.accounts
+            .map(a => `<option value="${a.id}" ${a.id === excludeId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`)
+            .join('');
+
+        const firstId = prefillFromId || appData.accounts[0].id;
+        const secondId = appData.accounts.find(a => a.id !== firstId)?.id || appData.accounts[1].id;
+
+        const content = `
+            <form id="transfer-form">
+                <div class="form-group">
+                    <label class="form-label">From Account</label>
+                    <select id="tf-from" class="form-control" onchange="app._syncTransferAccounts()">
+                        ${accountOptions(firstId)}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">To Account</label>
+                    <select id="tf-to" class="form-control">
+                        ${accountOptions(secondId)}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Amount</label>
+                    <input type="text" inputmode="decimal" id="tf-amount" class="form-control math-input" placeholder="e.g., 500" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" id="tf-date" class="form-control" required value="${new Date().toISOString().split('T')[0]}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Note (Optional)</label>
+                    <input type="text" id="tf-note" class="form-control" placeholder="e.g., Monthly savings transfer">
+                </div>
+            </form>
+        `;
+
+        this.showModal('Transfer Funds', content, () => {
+            const form = document.getElementById('transfer-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            const fromId = parseInt(document.getElementById('tf-from').value);
+            const toId = parseInt(document.getElementById('tf-to').value);
+            const amount = parseFloat(document.getElementById('tf-amount').value);
+            const date = document.getElementById('tf-date').value;
+            const note = document.getElementById('tf-note').value.trim();
+
+            if (fromId === toId) {
+                alert('Please select two different accounts.');
+                return false;
+            }
+            if (isNaN(amount) || amount <= 0) {
+                alert('Please enter a valid amount greater than zero.');
+                return false;
+            }
+
+            DataManager.transferFunds(fromId, toId, amount, date, note);
+            this.navigate(this.currentRoute);
+            return true;
+        });
+    }
+
+    _syncTransferAccounts() {
+        const fromSelect = document.getElementById('tf-from');
+        const toSelect = document.getElementById('tf-to');
+        if (!fromSelect || !toSelect) return;
+        const fromId = parseInt(fromSelect.value);
+        if (parseInt(toSelect.value) === fromId) {
+            const other = appData.accounts.find(a => a.id !== fromId);
+            if (other) toSelect.value = other.id;
+        }
     }
 
     showAddAccountModal() {

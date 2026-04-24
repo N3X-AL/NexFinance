@@ -1,5 +1,11 @@
 Views.accounts = () => {
     return `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+            <button class="btn btn-secondary" onclick="app.showTransferFundsModal()">
+                <span class="material-icons-round">swap_horiz</span>
+                Transfer Funds
+            </button>
+        </div>
         <div class="grid-cols-3">
             ${appData.accounts.map(acc => Components.accountCard(acc)).join('')}
             
