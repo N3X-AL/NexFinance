@@ -1,3 +1,5 @@
+let _transactionsDocClickHandler = null;
+
 Views.transactions = () => {
     const regularTxs = DataManager.getRegularTransactions();
 
@@ -11,8 +13,25 @@ Views.transactions = () => {
         let currentCategory = 'all';
         let currentMonths = 1;
         let chartInstance = null;
+        let isDateFiltered = false;
+
+        const restoreTransactionView = () => {
+            isDateFiltered = false;
+            const container = document.getElementById('transactions-page-container');
+            if (!container) return;
+            if (currentCategory === 'all') {
+                container.innerHTML = regularHTML;
+            } else {
+                const safeCategory = currentCategory.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                const filtered = regularTxs.filter(t => t.category === currentCategory && (currentType === 'expense' ? t.amount < 0 : t.amount > 0));
+                container.innerHTML = filtered.length > 0
+                    ? Components.transactionTable(filtered)
+                    : Components.emptyState('receipt_long', 'No transactions', `No ${currentType} transactions for "${safeCategory}".`);
+            }
+        };
         
         const renderCategoryChart = () => {
+            isDateFiltered = false;
             const ctx = document.getElementById('category-chart-canvas').getContext('2d');
             
             const now = new Date();
@@ -81,8 +100,9 @@ Views.transactions = () => {
             if (currentCategory === 'all') {
                 container.innerHTML = regularHTML;
             } else {
+                const safeCategory = currentCategory.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 const filtered = regularTxs.filter(t => t.category === currentCategory && (currentType === 'expense' ? t.amount < 0 : t.amount > 0));
-                container.innerHTML = filtered.length > 0 ? Components.transactionTable(filtered) : Components.emptyState('receipt_long', 'No transactions', `No ${currentType} transactions for "${currentCategory}".`);
+                container.innerHTML = filtered.length > 0 ? Components.transactionTable(filtered) : Components.emptyState('receipt_long', 'No transactions', `No ${currentType} transactions for "${safeCategory}".`);
             }
             
             if (chartInstance) chartInstance.destroy();
@@ -105,6 +125,27 @@ Views.transactions = () => {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    onClick: (event, elements, chart) => {
+                        if (elements.length > 0) {
+                            const clickedLabel = chart.data.labels[elements[0].index];
+                            let txsToFilter = regularTxs.filter(t => currentType === 'expense' ? t.amount < 0 : t.amount > 0);
+                            if (currentCategory !== 'all') {
+                                txsToFilter = txsToFilter.filter(t => t.category === currentCategory);
+                            }
+                            const filtered = txsToFilter.filter(t =>
+                                new Date(t.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) === clickedLabel
+                            );
+                            const txContainer = document.getElementById('transactions-page-container');
+                            if (txContainer) {
+                                isDateFiltered = true;
+                                txContainer.innerHTML = filtered.length > 0
+                                    ? Components.transactionTable(filtered)
+                                    : Components.emptyState('receipt_long', 'No transactions', `No transactions on ${clickedLabel}.`);
+                            }
+                        } else {
+                            restoreTransactionView();
+                        }
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -126,6 +167,21 @@ Views.transactions = () => {
         if (typeof Chart !== 'undefined') {
             renderCategoryChart();
         }
+
+        const onDocClick = (e) => {
+            const canvas = document.getElementById('category-chart-canvas');
+            if (!canvas) {
+                document.removeEventListener('click', _transactionsDocClickHandler);
+                _transactionsDocClickHandler = null;
+                return;
+            }
+            if (!canvas.contains(e.target) && isDateFiltered) {
+                restoreTransactionView();
+            }
+        };
+        if (_transactionsDocClickHandler) document.removeEventListener('click', _transactionsDocClickHandler);
+        _transactionsDocClickHandler = onDocClick;
+        document.addEventListener('click', onDocClick);
         
         document.querySelectorAll('.cat-type-tab').forEach(btn => {
             btn.addEventListener('click', (e) => {

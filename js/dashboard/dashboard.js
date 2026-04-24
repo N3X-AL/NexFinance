@@ -1,3 +1,5 @@
+let _dashboardDocClickHandler = null;
+
 Views.dashboard = () => {
     const netWorth = DataManager.getNetWorth();
     const moneyInHand = DataManager.getMoneyInHand();
@@ -48,8 +50,21 @@ Views.dashboard = () => {
         let currentType = 'expense';
         let currentMonths = 1;
         let chartInstance = null;
+        let isDateFiltered = false;
+
+        const allDashboardTxs = DataManager.getDashboardTransactions();
+
+        const restoreDashboardTx = () => {
+            isDateFiltered = false;
+            const container = document.getElementById('dashboard-tx-container');
+            if (container) container.innerHTML = regularTxHTML;
+        };
         
         const renderChart = () => {
+            isDateFiltered = false;
+            const container = document.getElementById('dashboard-tx-container');
+            if (container) container.innerHTML = regularTxHTML;
+
             const chartData = DataManager.getChartData(currentType, currentMonths);
             
             const textColor = '#9ca3af';
@@ -90,6 +105,23 @@ Views.dashboard = () => {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    onClick: (event, elements, chart) => {
+                        if (elements.length > 0) {
+                            const clickedLabel = chart.data.labels[elements[0].index];
+                            const filtered = allDashboardTxs.filter(t =>
+                                new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === clickedLabel
+                            );
+                            const txContainer = document.getElementById('dashboard-tx-container');
+                            if (txContainer) {
+                                isDateFiltered = true;
+                                txContainer.innerHTML = filtered.length > 0
+                                    ? Components.transactionTable(filtered)
+                                    : Components.emptyState('receipt_long', 'No transactions', `No transactions on ${clickedLabel}.`);
+                            }
+                        } else {
+                            restoreDashboardTx();
+                        }
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -131,6 +163,21 @@ Views.dashboard = () => {
             // Retry once if CDN is slow
             setTimeout(renderChart, 500);
         }
+
+        const onDocClick = (e) => {
+            const canvas = document.getElementById('main-dashboard-chart');
+            if (!canvas) {
+                document.removeEventListener('click', _dashboardDocClickHandler);
+                _dashboardDocClickHandler = null;
+                return;
+            }
+            if (!canvas.contains(e.target) && isDateFiltered) {
+                restoreDashboardTx();
+            }
+        };
+        if (_dashboardDocClickHandler) document.removeEventListener('click', _dashboardDocClickHandler);
+        _dashboardDocClickHandler = onDocClick;
+        document.addEventListener('click', onDocClick);
 
         // Bind events
         document.querySelectorAll('.chart-tab').forEach(btn => {
