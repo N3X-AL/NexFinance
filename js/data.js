@@ -149,7 +149,7 @@ const DataManager = {
     
     getMonthlyExpenses: () => {
         return Math.abs(appData.transactions
-            .filter(t => t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan')
+            .filter(t => t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer')
             .reduce((sum, t) => sum + t.amount, 0));
     },
 
@@ -164,15 +164,15 @@ const DataManager = {
         appData.transactions.forEach(t => {
             const d = new Date(t.date);
             if (d >= thirtyDaysAgo) {
-                if (t.amount > 0 && t.category !== 'Loan') currentIncome += t.amount;
-                if (t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan') currentExpense += Math.abs(t.amount);
-                if (t.category !== 'Loan') currentNet += t.amount;
-                currentMoney += t.amount;
+                if (t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer') currentIncome += t.amount;
+                if (t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer') currentExpense += Math.abs(t.amount);
+                if (t.category !== 'Loan' && t.category !== 'Transfer') currentNet += t.amount;
+                if (t.category !== 'Transfer') currentMoney += t.amount;
             } else if (d >= sixtyDaysAgo && d < thirtyDaysAgo) {
-                if (t.amount > 0 && t.category !== 'Loan') pastIncome += t.amount;
-                if (t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan') pastExpense += Math.abs(t.amount);
-                if (t.category !== 'Loan') pastNet += t.amount;
-                pastMoney += t.amount;
+                if (t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer') pastIncome += t.amount;
+                if (t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer') pastExpense += Math.abs(t.amount);
+                if (t.category !== 'Loan' && t.category !== 'Transfer') pastNet += t.amount;
+                if (t.category !== 'Transfer') pastMoney += t.amount;
             }
         });
         
@@ -196,78 +196,76 @@ const DataManager = {
         const now = new Date();
         now.setHours(23, 59, 59, 999);
         
-        // Calculate the start date (X months ago)
         const startDate = new Date(now);
         startDate.setMonth(startDate.getMonth() - months);
         startDate.setHours(0, 0, 0, 0);
 
-        let currentDate = new Date(startDate);
-        
-        // Pre-calculate running values right before the start date
+        if (type === 'income' || type === 'expense') {
+            // Only emit data points for days that actually have relevant transactions
+            const grouped = {};
+            [...appData.transactions]
+                .filter(t => {
+                    const td = new Date(t.date);
+                    if (td < startDate || td > now) return false;
+                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
+                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                })
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .forEach(t => {
+                    const label = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    grouped[label] = (grouped[label] || 0) + Math.abs(t.amount);
+                });
+            return { labels: Object.keys(grouped), data: Object.values(grouped) };
+        }
+
+        // networth / moneyinhand — running totals, only emit on days that have transactions
         let runningValue = 0;
         if (type === 'networth') {
             runningValue = DataManager.getNetWorth();
             appData.transactions.forEach(t => {
                 const td = new Date(t.date);
-                if (td >= startDate && t.category !== 'Loan') {
+                if (td >= startDate && t.category !== 'Loan' && t.category !== 'Transfer') {
                     runningValue -= t.amount;
                 }
             });
-        } else if (type === 'moneyinhand') {
+        } else {
             runningValue = DataManager.getMoneyInHand();
             appData.transactions.forEach(t => {
                 const td = new Date(t.date);
-                if (td >= startDate) {
+                if (td >= startDate && t.category !== 'Transfer') {
                     runningValue -= t.amount;
                 }
             });
         }
-        
-        while (currentDate <= now) {
-            labels.push(currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-            
-            const startOfDay = new Date(currentDate);
+
+        // Collect unique dates in range that have transactions, sorted ascending
+        const uniqueDates = [...new Set(
+            appData.transactions
+                .filter(t => {
+                    const td = new Date(t.date);
+                    return td >= startDate && td <= now;
+                })
+                .map(t => t.date)
+        )].sort();
+
+        uniqueDates.forEach(dateStr => {
+            const startOfDay = new Date(dateStr);
             startOfDay.setHours(0, 0, 0, 0);
-            const endOfDay = new Date(currentDate);
+            const endOfDay = new Date(dateStr);
             endOfDay.setHours(23, 59, 59, 999);
-            
-            let dayValue = 0;
-            
-            if (type === 'networth') {
-                appData.transactions.forEach(t => {
-                    const td = new Date(t.date);
-                    if (td >= startOfDay && td <= endOfDay && t.category !== 'Loan') {
-                        runningValue += t.amount;
-                    }
-                });
-                dayValue = runningValue;
-            } else if (type === 'moneyinhand') {
-                appData.transactions.forEach(t => {
-                    const td = new Date(t.date);
-                    if (td >= startOfDay && td <= endOfDay) {
-                        runningValue += t.amount;
-                    }
-                });
-                dayValue = runningValue;
-            } else {
-                appData.transactions.forEach(t => {
-                    const td = new Date(t.date);
-                    if (td >= startOfDay && td <= endOfDay) {
-                        if (type === 'income' && t.amount > 0 && t.category !== 'Loan') {
-                            dayValue += t.amount;
-                        } else if (type === 'expense' && t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan') {
-                            dayValue += Math.abs(t.amount);
-                        }
-                    }
-                });
-            }
-            
-            data.push(dayValue);
-            
-            // Move to next day
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
+
+            appData.transactions.forEach(t => {
+                const td = new Date(t.date);
+                if (td >= startOfDay && td <= endOfDay) {
+                    if (type === 'networth' && t.category !== 'Loan' && t.category !== 'Transfer') runningValue += t.amount;
+                    else if (type === 'moneyinhand' && t.category !== 'Transfer') runningValue += t.amount;
+                }
+            });
+
+            labels.push(new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            data.push(runningValue);
+        });
+
         return { labels, data };
     },
 
@@ -281,12 +279,27 @@ const DataManager = {
     },
 
     getRegularTransactions: (limit = null) => {
+        const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer').sort((a, b) => {
+            const dateDiff = new Date(b.date) - new Date(a.date);
+            if (dateDiff !== 0) return dateDiff;
+            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        });
+        return limit ? sorted.slice(0, limit) : sorted;
+    },
+
+    getDashboardTransactions: (limit = null) => {
         const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement').sort((a, b) => {
             const dateDiff = new Date(b.date) - new Date(a.date);
             if (dateDiff !== 0) return dateDiff;
             return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
         });
         return limit ? sorted.slice(0, limit) : sorted;
+    },
+
+    getAccountTransfers: (accountId) => {
+        return [...appData.transactions]
+            .filter(t => t.category === 'Transfer' && (t.accountId === accountId || t.toAccountId === accountId))
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
     },
 
     getLoanTransactions: (limit = null) => {
@@ -308,7 +321,7 @@ const DataManager = {
             : ['Salary', 'Gift', 'Business', 'Refund', 'Interest'];
         
         const extracted = appData.transactions
-            .filter(t => t.category !== 'Loan' && t.category !== 'Investment')
+            .filter(t => t.category !== 'Loan' && t.category !== 'Investment' && t.category !== 'Transfer')
             .filter(t => type === 'expense' ? t.amount < 0 : t.amount > 0)
             .map(t => t.category);
             

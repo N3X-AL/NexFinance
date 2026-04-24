@@ -3,7 +3,7 @@ Views.dashboard = () => {
     const moneyInHand = DataManager.getMoneyInHand();
     const income = DataManager.getMonthlyIncome();
     const expenses = DataManager.getMonthlyExpenses();
-    const recentTransactions = DataManager.getRegularTransactions(5);
+    const recentTransactions = DataManager.getDashboardTransactions(5);
     const trends = DataManager.getTrendStats();
 
     const regularTxHTML = recentTransactions.length > 0 ? Components.transactionTable(recentTransactions) : Components.emptyState('receipt_long', 'No transactions yet', 'Your recent transactions will appear here once you add them.');
