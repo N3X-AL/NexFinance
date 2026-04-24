@@ -418,6 +418,11 @@ class App {
         }
     }
 
+    toggleTransferHistory(btn) {
+        const panel = btn.nextElementSibling;
+        if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
     showAddAccountModal() {
         const content = `
             <form id="add-account-form">

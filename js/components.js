@@ -104,19 +104,53 @@ const Components = {
         </div>
     `,
 
-    accountCard: (account) => `
-        <div class="card animate-slide-up">
-            <div class="card-header">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 12px; height: 12px; border-radius: var(--radius-full); background: ${account.color}; box-shadow: 0 0 10px ${account.color};"></div>
-                    <h3 class="card-title">${account.name}</h3>
+    accountCard: (account) => {
+        const transfers = DataManager.getAccountTransfers(account.id);
+        const transferSection = transfers.length > 0 ? `
+            <div style="margin-top: 16px; border-top: 1px solid var(--border-light); padding-top: 12px;">
+                <button class="btn btn-secondary" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 12px; background: transparent; border: 1px solid var(--border-light);" onclick="app.toggleTransferHistory(this)">
+                    <span>Transfer History (${transfers.length})</span>
+                    <span class="material-icons-round" style="font-size: 16px;">swap_horiz</span>
+                </button>
+                <div style="display: none; margin-top: 8px;">
+                    ${transfers.map(t => {
+                        const isOutgoing = t.accountId === account.id;
+                        const otherId = isOutgoing ? t.toAccountId : t.accountId;
+                        const other = DataManager.getAccountById(otherId);
+                        const otherName = other ? other.name : 'Unknown';
+                        const noteMatch = t.merchant.match(/\(([^)]+)\)$/);
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border-light);">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="material-icons-round" style="font-size: 15px; color: ${isOutgoing ? 'var(--danger)' : 'var(--success)'};">${isOutgoing ? 'arrow_upward' : 'arrow_downward'}</span>
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 500;">${isOutgoing ? 'To ' + otherName : 'From ' + otherName}</div>
+                                        <div style="font-size: 11px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}${noteMatch ? ' · ' + noteMatch[1] : ''}</div>
+                                    </div>
+                                </div>
+                                <div style="font-size: 13px; font-weight: 600; color: ${isOutgoing ? 'var(--danger)' : 'var(--success)'};">${isOutgoing ? '-' : '+'}${DataManager.formatCurrency(Math.abs(t.amount))}</div>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
-                <span class="material-icons-round card-action" onclick="app.showEditAccountModal(${account.id})">edit</span>
             </div>
-            <div style="color: var(--text-secondary); font-size: 14px; margin-bottom: 8px;">${account.type} Account</div>
-            <div style="font-size: 28px; font-weight: 700;">${DataManager.formatCurrency(account.balance)}</div>
-        </div>
-    `,
+        ` : '';
+
+        return `
+            <div class="card animate-slide-up">
+                <div class="card-header">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 12px; height: 12px; border-radius: var(--radius-full); background: ${account.color}; box-shadow: 0 0 10px ${account.color};"></div>
+                        <h3 class="card-title">${account.name}</h3>
+                    </div>
+                    <span class="material-icons-round card-action" onclick="app.showEditAccountModal(${account.id})">edit</span>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 14px; margin-bottom: 8px;">${account.type} Account</div>
+                <div style="font-size: 28px; font-weight: 700;">${DataManager.formatCurrency(account.balance)}</div>
+                ${transferSection}
+            </div>
+        `;
+    },
 
     budgetCard: (budget) => {
         const percentage = Math.min((budget.spent / budget.limit) * 100, 100);
