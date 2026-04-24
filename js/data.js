@@ -577,6 +577,35 @@ const DataManager = {
         DataManager.saveData();
     },
     
+    transferFunds: (fromAccountId, toAccountId, amount, date, note) => {
+        const fromAccount = appData.accounts.find(a => a.id === fromAccountId);
+        const toAccount = appData.accounts.find(a => a.id === toAccountId);
+        if (!fromAccount || !toAccount || fromAccountId === toAccountId || amount <= 0) return false;
+
+        const description = note ? ` (${note})` : '';
+        const transferAmount = Math.abs(amount);
+
+        DataManager.addTransaction({
+            date: date,
+            merchant: `Transfer to ${toAccount.name}${description}`,
+            category: 'Transfer',
+            amount: -transferAmount,
+            accountId: fromAccountId,
+            status: 'Completed'
+        });
+
+        DataManager.addTransaction({
+            date: date,
+            merchant: `Transfer from ${fromAccount.name}${description}`,
+            category: 'Transfer',
+            amount: transferAmount,
+            accountId: toAccountId,
+            status: 'Completed'
+        });
+
+        return true;
+    },
+
     editAccount: (id, updatedData) => {
         const accountIndex = appData.accounts.findIndex(a => a.id === id);
         if (accountIndex !== -1) {
