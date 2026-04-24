@@ -1,4 +1,7 @@
 Views.accounts = () => {
+    const transferTxs = DataManager.getTransferTransactions();
+    const transfersHTML = transferTxs.length > 0 ? Components.transactionTable(transferTxs) : Components.emptyState('swap_horiz', 'No transfers yet', 'Transfers between your accounts will appear here.');
+
     return `
         <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
             <button class="btn btn-secondary" onclick="app.showTransferFundsModal()">
@@ -15,6 +18,13 @@ Views.accounts = () => {
                 </div>
                 <div style="font-weight: 500;">Add New Account</div>
             </div>
+        </div>
+
+        <div class="card animate-slide-up" style="margin-top: 24px;">
+            <div class="card-header">
+                <h3 class="card-title">Transfer History</h3>
+            </div>
+            ${transfersHTML}
         </div>
     `;
 };

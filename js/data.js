@@ -280,8 +280,8 @@ const DataManager = {
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
-    getRegularTransactions: (limit = null) => {
-        const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement').sort((a, b) => {
+    _sortedTransactions: (filterFn, limit) => {
+        const sorted = [...appData.transactions].filter(filterFn).sort((a, b) => {
             const dateDiff = new Date(b.date) - new Date(a.date);
             if (dateDiff !== 0) return dateDiff;
             return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
@@ -289,13 +289,16 @@ const DataManager = {
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
+    getRegularTransactions: (limit = null) => {
+        return DataManager._sortedTransactions(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer', limit);
+    },
+
+    getTransferTransactions: (limit = null) => {
+        return DataManager._sortedTransactions(t => t.category === 'Transfer', limit);
+    },
+
     getLoanTransactions: (limit = null) => {
-        const sorted = [...appData.transactions].filter(t => t.category === 'Loan' || t.category === 'Loan Settlement').sort((a, b) => {
-            const dateDiff = new Date(b.date) - new Date(a.date);
-            if (dateDiff !== 0) return dateDiff;
-            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-        });
-        return limit ? sorted.slice(0, limit) : sorted;
+        return DataManager._sortedTransactions(t => t.category === 'Loan' || t.category === 'Loan Settlement', limit);
     },
 
     getAccountById: (id) => {

@@ -4,9 +4,11 @@ Views.dashboard = () => {
     const income = DataManager.getMonthlyIncome();
     const expenses = DataManager.getMonthlyExpenses();
     const recentTransactions = DataManager.getRegularTransactions(5);
+    const recentTransfers = DataManager.getTransferTransactions(5);
     const trends = DataManager.getTrendStats();
 
     const regularTxHTML = recentTransactions.length > 0 ? Components.transactionTable(recentTransactions) : Components.emptyState('receipt_long', 'No transactions yet', 'Your recent transactions will appear here once you add them.');
+    const transferTxHTML = recentTransfers.length > 0 ? Components.transactionTable(recentTransfers) : Components.emptyState('swap_horiz', 'No transfers yet', 'Your recent account transfers will appear here.');
 
     const loanTxHTML = (() => {
         const loans = DataManager.getLoans();
@@ -167,6 +169,8 @@ Views.dashboard = () => {
                 const container = document.getElementById('dashboard-tx-container');
                 if (type === 'regular') {
                     container.innerHTML = regularTxHTML;
+                } else if (type === 'transfers') {
+                    container.innerHTML = transferTxHTML;
                 } else {
                     container.innerHTML = loanTxHTML;
                 }
@@ -224,6 +228,7 @@ Views.dashboard = () => {
                             <h3 class="card-title">Recent Transactions</h3>
                             <div style="display: flex; gap: 8px; margin-top: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border); width: fit-content;">
                                 <button class="dashboard-tx-tab" data-type="regular" style="padding: 4px 12px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer;">Regular</button>
+                                <button class="dashboard-tx-tab" data-type="transfers" style="padding: 4px 12px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer;">Transfers</button>
                                 <button class="dashboard-tx-tab" data-type="loans" style="padding: 4px 12px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer;">Loans</button>
                             </div>
                         </div>
