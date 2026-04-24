@@ -352,7 +352,7 @@ const DataManager = {
         if (transaction.toAccountId) {
             const toAccount = appData.accounts.find(a => a.id === parseInt(transaction.toAccountId));
             if (toAccount) {
-                toAccount.balance += Math.abs(parseFloat(transaction.amount));
+                toAccount.balance -= parseFloat(transaction.amount);
             }
         }
         
@@ -371,7 +371,7 @@ const DataManager = {
             if (t.toAccountId) {
                 const toAccount = appData.accounts.find(a => a.id === parseInt(t.toAccountId));
                 if (toAccount) {
-                    toAccount.balance -= Math.abs(parseFloat(t.amount));
+                    toAccount.balance += parseFloat(t.amount);
                 }
             }
             appData.transactions.splice(index, 1);
