@@ -269,6 +269,77 @@ const DataManager = {
         return { labels, data };
     },
 
+    getMonthlyChartData: (type, months) => {
+        const now = new Date();
+        const labels = [];
+        const data = [];
+
+        for (let i = months - 1; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            labels.push(d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
+        }
+
+        if (type === 'income' || type === 'expense') {
+            labels.forEach(label => {
+                const sum = appData.transactions
+                    .filter(t => {
+                        const td = new Date(t.date);
+                        const tLabel = td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                        if (tLabel !== label) return false;
+                        if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
+                        return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                    })
+                    .reduce((s, t) => s + Math.abs(t.amount), 0);
+                data.push(sum);
+            });
+        } else {
+            const startMonth = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+            startMonth.setHours(0, 0, 0, 0);
+            let runningValue = 0;
+            appData.transactions
+                .filter(t => {
+                    const td = new Date(t.date);
+                    if (td >= startMonth) return false;
+                    if (type === 'networth') return t.category !== 'Loan' && t.category !== 'Transfer';
+                    return t.category !== 'Transfer';
+                })
+                .forEach(t => { runningValue += t.amount; });
+
+            labels.forEach(label => {
+                appData.transactions
+                    .filter(t => {
+                        const td = new Date(t.date);
+                        const tLabel = td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                        if (tLabel !== label) return false;
+                        if (type === 'networth') return t.category !== 'Loan' && t.category !== 'Transfer';
+                        return t.category !== 'Transfer';
+                    })
+                    .forEach(t => { runningValue += t.amount; });
+                data.push(runningValue);
+            });
+        }
+
+        return { labels, data };
+    },
+
+    getAllTransactionsChartData: (limit) => {
+        const sorted = [...appData.transactions]
+            .sort((a, b) => {
+                const dateDiff = new Date(a.date) - new Date(b.date);
+                if (dateDiff !== 0) return dateDiff;
+                return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+            })
+            .slice(-limit);
+
+        return {
+            labels: sorted.map(t => new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            data: sorted.map(t => t.amount),
+            descriptions: sorted.map(t => t.description || t.category),
+            colors: sorted.map(t => t.amount >= 0 ? 'rgba(16, 185, 129, 0.75)' : 'rgba(239, 68, 68, 0.75)'),
+            borderColors: sorted.map(t => t.amount >= 0 ? '#10b981' : '#ef4444')
+        };
+    },
+
     getTransactions: (limit = null) => {
         const sorted = [...appData.transactions].sort((a, b) => {
             const dateDiff = new Date(b.date) - new Date(a.date);
