@@ -605,6 +605,33 @@ const DataManager = {
         DataManager.saveData();
     },
     
+    mutualSettlement: (personName, amount) => {
+        const lowerName = (personName || '').toLowerCase();
+        const offsetAmount = Math.abs(amount);
+
+        const applyDirectSettlement = (loanType) => {
+            const loans = appData.loans.filter(l =>
+                (l.person || '').toLowerCase() === lowerName &&
+                l.type === loanType && l.status === 'active'
+            ).sort((a, b) => a.date.localeCompare(b.date));
+
+            let remainingToSettle = offsetAmount;
+            for (const loan of loans) {
+                if (remainingToSettle <= 0) break;
+                const unsettledAmount = loan.amount - loan.settledAmount;
+                const toSettle = Math.min(remainingToSettle, unsettledAmount);
+                loan.settledAmount += toSettle;
+                if (loan.settledAmount >= loan.amount) loan.status = 'settled';
+                remainingToSettle -= toSettle;
+            }
+        };
+
+        applyDirectSettlement('received'); // I owe them — offset first
+        applyDirectSettlement('given');    // They owe me — offset same amount
+
+        DataManager.saveData();
+    },
+
     transferFunds: (fromAccountId, toAccountId, amount, date, note) => {
         const fromAccount = appData.accounts.find(a => a.id === fromAccountId);
         const toAccount = appData.accounts.find(a => a.id === toAccountId);
