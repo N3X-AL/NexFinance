@@ -246,6 +246,10 @@ const Components = {
             `;
         };
 
+        const hasGivenActive = activeLoans.some(l => l.type === 'given');
+        const hasReceivedActive = activeLoans.some(l => l.type === 'received');
+        const canMutualSettle = hasGivenActive && hasReceivedActive;
+
         return `
             <div class="card animate-slide-up" style="position: relative;">
                 ${netBalance === 0 && activeLoans.length === 0 ? '<div style="position: absolute; top: 12px; right: 12px;"><span class="tag bg-success-light">All Settled</span></div>' : ''}
@@ -266,7 +270,7 @@ const Components = {
                     </div>` : '<div style="text-align: right;"><div style="font-size: 14px; color: var(--text-secondary); font-weight: 500;">No active balance</div></div>'}
                 </div>
                 
-                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <div style="display: flex; gap: 8px; margin-bottom: ${canMutualSettle ? '8px' : '16px'};">
                      <button class="btn btn-secondary" style="flex: 1; padding: 8px 4px; font-size: 13px;" onclick="app.showAddLoanModal('given', '${name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">
                         <span class="material-icons-round" style="font-size: 16px; margin-right: 4px; vertical-align: bottom;">arrow_upward</span>Lend
                      </button>
@@ -274,6 +278,12 @@ const Components = {
                          <span class="material-icons-round" style="font-size: 16px; margin-right: 4px; vertical-align: bottom;">arrow_downward</span>Borrow
                      </button>
                 </div>
+                ${canMutualSettle ? `
+                <div style="margin-bottom: 16px;">
+                    <button class="btn btn-primary" style="width: 100%; padding: 8px 4px; font-size: 13px;" onclick="app.showMutualSettlementModal(${JSON.stringify(name)})">
+                        <span class="material-icons-round" style="font-size: 16px; margin-right: 4px; vertical-align: bottom;">swap_horiz</span>Settle Up (Mutual Offset)
+                    </button>
+                </div>` : ''}
 
                 ${activeLoans.length > 0 ? `
                 <div>

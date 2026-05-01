@@ -919,6 +919,82 @@ class App {
         alert(`Successfully imported ${importedCount} transactions from Everplan/CSV!`);
     }
 
+    showMutualSettlementModal(personName) {
+        const lowerName = personName.toLowerCase();
+
+        const givenLoans = appData.loans.filter(l =>
+            (l.person || '').toLowerCase() === lowerName &&
+            l.type === 'given' && l.status === 'active'
+        );
+        const receivedLoans = appData.loans.filter(l =>
+            (l.person || '').toLowerCase() === lowerName &&
+            l.type === 'received' && l.status === 'active'
+        );
+
+        const totalGiven = givenLoans.reduce((s, l) => s + (l.amount - l.settledAmount), 0);
+        const totalReceived = receivedLoans.reduce((s, l) => s + (l.amount - l.settledAmount), 0);
+        const maxSettle = Math.min(totalGiven, totalReceived);
+
+        const loanRows = (loans, label, colorVar) => loans.map(l => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px;">
+                <div>
+                    <span style="color:${colorVar};font-weight:500;">${label}</span>
+                    ${l.description ? `<span style="color:var(--text-secondary);"> — ${l.description}</span>` : ''}
+                    <div style="color:var(--text-muted);font-size:11px;">${DataManager.formatDate(l.date)}</div>
+                </div>
+                <span style="font-weight:600;">${DataManager.formatCurrency(l.amount - l.settledAmount)}</span>
+            </div>`).join('');
+
+        const content = `
+            <form id="mutual-settle-form">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+                    Offset debts between you and <strong>${personName}</strong> without any money changing hands.
+                </p>
+
+                <div style="margin-bottom:16px;">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">They owe you</div>
+                    ${loanRows(givenLoans, 'Lent / Paid for them', 'var(--warning)')}
+                    <div style="text-align:right;font-size:13px;font-weight:600;margin-top:6px;">Total: ${DataManager.formatCurrency(totalGiven)}</div>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">You owe them</div>
+                    ${loanRows(receivedLoans, 'Borrowed / Paid for you', 'var(--accent)')}
+                    <div style="text-align:right;font-size:13px;font-weight:600;margin-top:6px;">Total: ${DataManager.formatCurrency(totalReceived)}</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Amount to Mutually Settle</label>
+                    <input type="text" inputmode="decimal" id="ms-amount" class="form-control math-input"
+                        value="${maxSettle.toFixed(2)}" min="0.01" max="${maxSettle.toFixed(2)}" required>
+                    <small style="color:var(--text-secondary);display:block;margin-top:4px;">
+                        Max: ${DataManager.formatCurrency(maxSettle)} — no cash moves; both sides are offset against each other.
+                    </small>
+                </div>
+            </form>
+        `;
+
+        this.showModal(`Settle Up with ${personName}`, content, () => {
+            const form = document.getElementById('mutual-settle-form');
+            if (!form.checkValidity()) { form.reportValidity(); return false; }
+
+            const FLOAT_TOLERANCE = 0.001;
+            const amount = parseFloat(document.getElementById('ms-amount').value);
+            if (isNaN(amount) || amount <= 0) {
+                alert('Please enter a valid amount greater than zero.');
+                return false;
+            }
+            if (amount > maxSettle + FLOAT_TOLERANCE) {
+                alert(`Settlement amount cannot exceed ${DataManager.formatCurrency(maxSettle)}.`);
+                return false;
+            }
+
+            DataManager.mutualSettlement(personName, amount);
+            this.navigate(this.currentRoute);
+            return true;
+        });
+    }
+
     deleteTransaction(id) {
         if (confirm("Are you sure you want to delete this transaction? This action cannot be undone.")) {
             if (DataManager.deleteTransaction(id)) {
