@@ -565,6 +565,13 @@ const DataManager = {
     getLoans: () => {
         return appData.loans;
     },
+
+    findLoanDisbursementTransaction: (loanId) => {
+        return appData.transactions.find(t =>
+            t.loanId === loanId &&
+            (t.merchant.startsWith('Loan Given:') || t.merchant.startsWith('Loan Received:'))
+        );
+    },
     
     addLoan: (loan, accountId) => {
         let remainingAmount = loan.amount;
@@ -674,7 +681,13 @@ const DataManager = {
         } else if (loan.settledAmount >= loan.amount) {
             loan.status = 'settled';
         }
-        
+
+        // If the account changed, move the original disbursement transaction to the new account
+        const originalTx = DataManager.findLoanDisbursementTransaction(loanId);
+        if (originalTx && parseInt(originalTx.accountId) !== parseInt(accountId)) {
+            DataManager.editTransaction(originalTx.id, { accountId: accountId, amount: originalTx.amount });
+        }
+
         // Log the difference if amount changed
         if (amountDiff !== 0) {
             // "given" means I gave them money. If new amount > old amount (amountDiff > 0), I gave MORE money.

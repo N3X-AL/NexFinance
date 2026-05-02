@@ -629,7 +629,10 @@ class App {
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
 
-        const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const originalTx = DataManager.findLoanDisbursementTransaction(loanId);
+        const originalAccountId = originalTx ? parseInt(originalTx.accountId) : null;
+
+        const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === originalAccountId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
 
         const content = `
             <form id="edit-loan-form">
@@ -647,7 +650,7 @@ class App {
                     <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Settled amount so far: ${DataManager.formatCurrency(loan.settledAmount)}</small>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Account (for any change in amount)</label>
+                    <label class="form-label">Account</label>
                     <select id="e-account" class="form-control">
                         ${accountOptions}
                     </select>
