@@ -207,6 +207,8 @@ const Components = {
         const renderSubLoan = (loan, isSettled) => {
             const percentage = Math.min((loan.settledAmount / loan.amount) * 100, 100);
             const colorC = loan.type === 'given' ? 'var(--warning)' : 'var(--accent)';
+            const loanTx = DataManager.findLoanDisbursementTransaction(loan.id);
+            const loanAccount = loanTx ? DataManager.getAccountById(loanTx.accountId) : null;
             return `
                 <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
@@ -214,6 +216,7 @@ const Components = {
                             <div style="font-size: 12px; font-weight: 500; color: ${colorC};">${loan.type === 'given' ? 'Lent / Paid for them' : 'Borrowed / Paid for you'}</div>
                             ${loan.description ? `<div style="font-size: 12px; color: var(--text-primary); margin-top: 4px;">${loan.description}</div>` : ''}
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${DataManager.formatDate(loan.date)}</div>
+                            ${loanAccount ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: flex; align-items: center; gap: 3px;"><span class="material-icons-round" style="font-size: 12px;">account_balance_wallet</span>${loanAccount.name}</div>` : ''}
                         </div>
                         <div style="text-align: right;">
                             <span style="font-weight: 600; font-size: 14px;">${DataManager.formatCurrency(isSettled ? loan.amount : loan.amount - loan.settledAmount)}</span>
