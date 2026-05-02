@@ -248,12 +248,12 @@ Views.dashboard = () => {
                         },
                         scales: {
                             y: {
-                                beginAtZero: true,
+                                beginAtZero: currentType !== 'networth' && currentType !== 'moneyinhand',
                                 grid: { color: gridColor },
                                 ticks: {
                                     color: textColor,
                                     callback: function(value) {
-                                        if (value >= 1000 || value <= -1000) return (value / 1000).toFixed(1) + 'k';
+                                        if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + 'k';
                                         return value;
                                     }
                                 }
