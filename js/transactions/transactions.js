@@ -6,11 +6,12 @@ Views.transactions = () => {
     const regularHTML = regularTxs.length > 0 ? Components.transactionTable(regularTxs) : Components.emptyState('receipt_long', 'No transactions yet', 'Start adding your income and expenses to track your finances.');
 
     setTimeout(() => {
-        if (!document.getElementById('net-cashflow-chart-canvas')) return;
+        if (!document.getElementById('tx-cashflow-chart-canvas')) return;
 
         let currentMonths = 1;
         let chartInstance = null;
         let isDateFiltered = false;
+        let currentChartType = 'net'; // 'net' | 'income' | 'expense'
 
         const restoreTransactionView = () => {
             isDateFiltered = false;
@@ -18,9 +19,9 @@ Views.transactions = () => {
             if (container) container.innerHTML = regularHTML;
         };
 
-        const renderNetChart = () => {
+        const renderChart = () => {
             isDateFiltered = false;
-            const ctx = document.getElementById('net-cashflow-chart-canvas').getContext('2d');
+            const ctx = document.getElementById('tx-cashflow-chart-canvas').getContext('2d');
 
             const now = new Date();
             now.setHours(23, 59, 59, 999);
@@ -28,27 +29,54 @@ Views.transactions = () => {
             startDate.setMonth(startDate.getMonth() - currentMonths);
             startDate.setHours(0, 0, 0, 0);
 
-            // Group all transactions by day, summing net (income positive, expense negative)
-            const grouped = {};
-            regularTxs
-                .filter(t => new Date(t.date) >= startDate)
-                .sort((a, b) => new Date(a.date) - new Date(b.date))
-                .forEach(t => {
-                    const d = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    grouped[d] = (grouped[d] || 0) + t.amount;
-                });
+            let labels, data, chartColor, chartBorderColor, statLabel, statColor;
 
-            const labels = Object.keys(grouped);
-            const data = Object.values(grouped);
-
-            // Update summary stat
-            const totalNet = data.reduce((a, b) => a + b, 0);
-            const netLabel = document.getElementById('net-total-label');
-            const netAmount = document.getElementById('net-total-amount');
-            if (netLabel) netLabel.textContent = totalNet >= 0 ? 'Net Gain' : 'Net Loss';
-            if (netAmount) {
-                netAmount.textContent = DataManager.formatCurrency(Math.abs(totalNet));
-                netAmount.style.color = totalNet >= 0 ? 'var(--success)' : 'var(--danger)';
+            if (currentChartType === 'net') {
+                // Group all transactions by day, summing net
+                const grouped = {};
+                regularTxs
+                    .filter(t => new Date(t.date) >= startDate)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .forEach(t => {
+                        const d = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        grouped[d] = (grouped[d] || 0) + t.amount;
+                    });
+                labels = Object.keys(grouped);
+                data = Object.values(grouped);
+                const totalNet = data.reduce((a, b) => a + b, 0);
+                statLabel = totalNet >= 0 ? 'Net Gain' : 'Net Loss';
+                statColor = totalNet >= 0 ? 'var(--success)' : 'var(--danger)';
+                chartColor = data.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)');
+                chartBorderColor = data.map(v => v >= 0 ? '#10b981' : '#ef4444');
+                const statAmountEl = document.getElementById('tx-stat-amount');
+                const statLabelEl = document.getElementById('tx-stat-label');
+                if (statLabelEl) statLabelEl.textContent = statLabel;
+                if (statAmountEl) { statAmountEl.textContent = DataManager.formatCurrency(Math.abs(totalNet)); statAmountEl.style.color = statColor; }
+                const legendEl = document.getElementById('tx-chart-legend');
+                if (legendEl) legendEl.style.display = 'flex';
+            } else {
+                // Use DataManager for income/expense data
+                const chartData = DataManager.getChartData(currentChartType, currentMonths);
+                labels = chartData.labels;
+                data = chartData.data;
+                const total = data.reduce((a, b) => a + b, 0);
+                if (currentChartType === 'income') {
+                    statLabel = 'Total Income';
+                    statColor = 'var(--success)';
+                    chartColor = 'rgba(16, 185, 129, 0.7)';
+                    chartBorderColor = '#10b981';
+                } else {
+                    statLabel = 'Total Expenses';
+                    statColor = 'var(--danger)';
+                    chartColor = 'rgba(239, 68, 68, 0.7)';
+                    chartBorderColor = '#ef4444';
+                }
+                const statAmountEl = document.getElementById('tx-stat-amount');
+                const statLabelEl = document.getElementById('tx-stat-label');
+                if (statLabelEl) statLabelEl.textContent = statLabel;
+                if (statAmountEl) { statAmountEl.textContent = DataManager.formatCurrency(total); statAmountEl.style.color = statColor; }
+                const legendEl = document.getElementById('tx-chart-legend');
+                if (legendEl) legendEl.style.display = 'none';
             }
 
             // Reset table
@@ -62,10 +90,10 @@ Views.transactions = () => {
                 data: {
                     labels,
                     datasets: [{
-                        label: 'Net',
+                        label: currentChartType === 'net' ? 'Net' : currentChartType === 'income' ? 'Income' : 'Expense',
                         data,
-                        backgroundColor: data.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
-                        borderColor: data.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+                        backgroundColor: chartColor,
+                        borderColor: chartBorderColor,
                         borderWidth: 1,
                         borderRadius: 4
                     }]
@@ -76,9 +104,11 @@ Views.transactions = () => {
                     onClick: (event, elements, chart) => {
                         if (elements.length > 0) {
                             const clickedLabel = chart.data.labels[elements[0].index];
-                            const txsForDay = regularTxs.filter(t =>
+                            let txsForDay = regularTxs.filter(t =>
                                 new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === clickedLabel
                             );
+                            if (currentChartType === 'income') txsForDay = txsForDay.filter(t => t.amount > 0);
+                            if (currentChartType === 'expense') txsForDay = txsForDay.filter(t => t.amount < 0);
                             const txContainer = document.getElementById('transactions-page-container');
                             if (txContainer) {
                                 isDateFiltered = true;
@@ -96,8 +126,11 @@ Views.transactions = () => {
                             callbacks: {
                                 label: function(context) {
                                     const val = context.raw;
-                                    const sign = val >= 0 ? '+' : '';
-                                    return sign + DataManager.formatCurrency(val);
+                                    if (currentChartType === 'net') {
+                                        const sign = val >= 0 ? '+' : '';
+                                        return sign + DataManager.formatCurrency(val);
+                                    }
+                                    return DataManager.formatCurrency(val);
                                 }
                             }
                         }
@@ -123,11 +156,11 @@ Views.transactions = () => {
         };
 
         if (typeof Chart !== 'undefined') {
-            renderNetChart();
+            renderChart();
         }
 
         const onDocClick = (e) => {
-            const canvas = document.getElementById('net-cashflow-chart-canvas');
+            const canvas = document.getElementById('tx-cashflow-chart-canvas');
             if (!canvas) {
                 document.removeEventListener('click', _transactionsDocClickHandler);
                 _transactionsDocClickHandler = null;
@@ -141,43 +174,63 @@ Views.transactions = () => {
         _transactionsDocClickHandler = onDocClick;
         document.addEventListener('click', onDocClick);
 
+        document.querySelectorAll('.tx-chart-tab').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tx-chart-tab').forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--text-secondary)';
+                });
+                e.currentTarget.style.background = 'var(--primary)';
+                e.currentTarget.style.color = 'white';
+                currentChartType = e.currentTarget.getAttribute('data-type');
+                renderChart();
+            });
+        });
+
         document.getElementById('tx-chart-months-slider').addEventListener('input', (e) => {
             currentMonths = parseInt(e.target.value);
             document.getElementById('tx-chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
-            renderNetChart();
+            renderChart();
         });
 
     }, 50);
 
     return `
         <div class="card animate-slide-up" style="margin-bottom: 24px;">
-            <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
+            <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
                 <div>
-                    <h3 class="card-title">Daily Net Cashflow</h3>
-                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Net gain or loss per day — tap a bar to see that day's transactions</p>
+                    <h3 class="card-title">Daily Cashflow</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Tap a bar to see that day's transactions</p>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
-                    <span class="material-icons-round text-secondary" style="font-size: 18px;">date_range</span>
-                    <input type="range" id="tx-chart-months-slider" min="1" max="6" value="1" style="width: 80px; accent-color: var(--primary);">
-                    <span id="tx-chart-months-label" style="font-weight: 600; width: 45px; text-align: right;">1 Mo</span>
-                </div>
-            </div>
-            <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: center; margin-top: 16px;">
-                <div style="min-width: 110px;">
-                    <div id="net-total-label" style="color: var(--text-secondary); font-size: 13px; margin-bottom: 4px;">Net Gain</div>
-                    <div id="net-total-amount" style="font-size: 26px; font-weight: 700; color: var(--success);">$0.00</div>
-                    <div style="display: flex; gap: 12px; margin-top: 12px;">
-                        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
-                            <span style="width: 10px; height: 10px; border-radius: 2px; background: #10b981; display: inline-block;"></span>Gained
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
-                            <span style="width: 10px; height: 10px; border-radius: 2px; background: #ef4444; display: inline-block;"></span>Lost
-                        </div>
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div class="chart-type-tabs" style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                        <button class="btn tx-chart-tab" data-type="net" style="padding: 6px 14px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 13px;">Net</button>
+                        <button class="btn tx-chart-tab" data-type="income" style="padding: 6px 14px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px;">Income</button>
+                        <button class="btn tx-chart-tab" data-type="expense" style="padding: 6px 14px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px;">Expense</button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                        <span class="material-icons-round text-secondary" style="font-size: 18px;">date_range</span>
+                        <input type="range" id="tx-chart-months-slider" min="1" max="6" value="1" style="width: 80px; accent-color: var(--primary);">
+                        <span id="tx-chart-months-label" style="font-weight: 600; width: 45px; text-align: right;">1 Mo</span>
                     </div>
                 </div>
-                <div style="flex: 1; min-width: 260px; height: 200px; position: relative;">
-                    <canvas id="net-cashflow-chart-canvas"></canvas>
+            </div>
+            <div style="display: flex; align-items: center; gap: 20px; margin-top: 14px; margin-bottom: 10px; flex-wrap: wrap;">
+                <div>
+                    <div id="tx-stat-label" style="color: var(--text-secondary); font-size: 13px; margin-bottom: 2px;">Net Gain</div>
+                    <div id="tx-stat-amount" style="font-size: 22px; font-weight: 700; color: var(--success);">$0.00</div>
                 </div>
+                <div id="tx-chart-legend" style="display: flex; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+                        <span style="width: 10px; height: 10px; border-radius: 2px; background: #10b981; display: inline-block;"></span>Gained
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+                        <span style="width: 10px; height: 10px; border-radius: 2px; background: #ef4444; display: inline-block;"></span>Lost
+                    </div>
+                </div>
+            </div>
+            <div style="height: 200px; position: relative; width: 100%;">
+                <canvas id="tx-cashflow-chart-canvas"></canvas>
             </div>
         </div>
 
