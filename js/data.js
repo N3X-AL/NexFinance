@@ -322,8 +322,80 @@ const DataManager = {
         return { labels, data };
     },
 
+    getTransactionYears: () => {
+        const currentYear = new Date().getFullYear();
+        const years = [...new Set(appData.transactions.map(t => new Date(t.date).getFullYear()))];
+        if (!years.includes(currentYear)) years.push(currentYear);
+        return years.sort((a, b) => b - a);
+    },
+
+    getDailyChartDataForMonth: (type, year, month) => {
+        const startDate = new Date(year, month, 1);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(year, month + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
+
+        if (type === 'income' || type === 'expense') {
+            const grouped = {};
+            [...appData.transactions]
+                .filter(t => {
+                    const td = new Date(t.date);
+                    if (td < startDate || td > endDate) return false;
+                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
+                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                })
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .forEach(t => {
+                    const label = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    grouped[label] = (grouped[label] || 0) + Math.abs(t.amount);
+                });
+            return { labels: Object.keys(grouped), data: Object.values(grouped) };
+        }
+
+        // networth / moneyinhand — running total rewound to start of month
+        let runningValue = 0;
+        if (type === 'networth') {
+            runningValue = DataManager.getNetWorth();
+            appData.transactions.forEach(t => {
+                const td = new Date(t.date);
+                if (td >= startDate && t.category !== 'Loan' && t.category !== 'Transfer') runningValue -= t.amount;
+            });
+        } else {
+            runningValue = DataManager.getMoneyInHand();
+            appData.transactions.forEach(t => {
+                const td = new Date(t.date);
+                if (td >= startDate && t.category !== 'Transfer') runningValue -= t.amount;
+            });
+        }
+
+        const uniqueDates = [...new Set(
+            appData.transactions
+                .filter(t => { const td = new Date(t.date); return td >= startDate && td <= endDate; })
+                .map(t => t.date)
+        )].sort();
+
+        const labels = [];
+        const data = [];
+        uniqueDates.forEach(dateStr => {
+            const startOfDay = new Date(dateStr); startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(dateStr); endOfDay.setHours(23, 59, 59, 999);
+            appData.transactions.forEach(t => {
+                const td = new Date(t.date);
+                if (td >= startOfDay && td <= endOfDay) {
+                    if (type === 'networth' && t.category !== 'Loan' && t.category !== 'Transfer') runningValue += t.amount;
+                    else if (type === 'moneyinhand' && t.category !== 'Transfer') runningValue += t.amount;
+                }
+            });
+            labels.push(new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            data.push(runningValue);
+        });
+
+        return { labels, data };
+    },
+
     getAllTransactionsChartData: (limit) => {
         const sorted = [...appData.transactions]
+            .filter(t => t.category !== 'Transfer')
             .sort((a, b) => {
                 const dateDiff = new Date(a.date) - new Date(b.date);
                 if (dateDiff !== 0) return dateDiff;
