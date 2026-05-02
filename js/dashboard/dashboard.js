@@ -112,7 +112,7 @@ Views.dashboard = () => {
             const textColor = '#9ca3af';
             const gridColor = 'rgba(255, 255, 255, 0.05)';
 
-            // ── Both (Income + Expense) combined view ─────────────────────
+            // ── Both — net daily cashflow (positive = gained, negative = spent more) ──
             if (currentType === 'both') {
                 const incomeData = currentViewMode === 'monthly'
                     ? DataManager.getDailyChartDataForMonth('income', currentMonthlyYear, currentMonthlyMonth)
@@ -136,32 +136,29 @@ Views.dashboard = () => {
                 const expenseMap = {};
                 expenseData.labels.forEach((l, i) => { expenseMap[l] = expenseData.data[i]; });
 
+                // Net per day: income - expense (expense data is already positive magnitude)
+                const netData = allLabels.map(l => (incomeMap[l] || 0) - (expenseMap[l] || 0));
+
                 chartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
                         labels: allLabels,
-                        datasets: [
-                            {
-                                label: 'Income',
-                                data: allLabels.map(l => incomeMap[l] || 0),
-                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
-                                borderColor: '#10b981',
-                                borderWidth: 1,
-                                borderRadius: 4
-                            },
-                            {
-                                label: 'Expense',
-                                data: allLabels.map(l => expenseMap[l] || 0),
-                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                                borderColor: '#ef4444',
-                                borderWidth: 1,
-                                borderRadius: 4
-                            }
-                        ]
+                        datasets: [{
+                            label: 'Net',
+                            data: netData,
+                            backgroundColor: netData.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.75)' : 'rgba(239, 68, 68, 0.75)'),
+                            borderColor: netData.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
                         onClick: (event, elements, chart) => {
                             if (elements.length > 0) {
                                 const clickedLabel = chart.data.labels[elements[0].index];
@@ -180,18 +177,21 @@ Views.dashboard = () => {
                             }
                         },
                         plugins: {
-                            legend: { display: true, labels: { color: textColor } },
+                            legend: { display: false },
                             tooltip: {
+                                mode: 'index',
+                                intersect: false,
                                 callbacks: {
                                     label: function(context) {
-                                        return context.dataset.label + ': ' + DataManager.formatCurrency(context.raw);
+                                        const val = context.raw;
+                                        const sign = val >= 0 ? '+' : '';
+                                        return sign + DataManager.formatCurrency(val);
                                     }
                                 }
                             }
                         },
                         scales: {
                             y: {
-                                beginAtZero: true,
                                 grid: { color: gridColor },
                                 ticks: {
                                     color: textColor,

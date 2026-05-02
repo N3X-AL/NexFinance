@@ -314,6 +314,18 @@
         padding: 16px;
         padding-bottom: 80px;
     }
+
+    /* Prevent chart canvas containers from overflowing */
+    .chart-container {
+        height: 220px !important;
+    }
+
+    /* Prevent min-width from breaking mobile layout in flex chart wrappers */
+    .card div[style*="min-width: 260px"],
+    .card div[style*="min-width: 300px"] {
+        min-width: 0 !important;
+        width: 100%;
+    }
     
     /* Responsive Data Table */
     .data-table thead {
@@ -400,9 +412,14 @@
 
 /* Chart type tabs — horizontally scrollable on mobile */
 @media (max-width: 768px) {
+    /* Make the controls row take full width so chart tabs can fill & scroll */
+    .card-header > div[style*="flex-wrap: wrap"] {
+        width: 100%;
+    }
+
     .chart-type-tabs {
         overflow-x: auto;
-        max-width: 100%;
+        max-width: calc(100vw - 64px);
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
         flex-shrink: 0;
@@ -415,5 +432,23 @@
     .chart-type-tabs .btn {
         white-space: nowrap;
         flex-shrink: 0;
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+
+    #chart-view-mode-toggle .btn {
+        padding: 4px 10px;
+        font-size: 12px;
+    }
+
+    #chart-slider-container {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    #chart-slider-container input[type="range"] {
+        flex: 1;
+        min-width: 0;
+        width: auto;
     }
 }
