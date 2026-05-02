@@ -48,7 +48,11 @@ Views.dashboard = () => {
         
         const ctx = document.getElementById('main-dashboard-chart').getContext('2d');
         let currentType = 'expense';
-        let currentMonths = 1;
+        let currentViewMode = 'daily'; // 'daily' | 'monthly'
+        let currentDailyMonths = 1;
+        let currentMonthlyMonths = 6;
+        let currentAllTxIdx = 2; // slider position (1-based); maps to allTxLimitValues[idx-1]
+        const allTxLimitValues = [10, 20, 30, 50, 100];
         let chartInstance = null;
         let isDateFiltered = false;
 
@@ -60,25 +64,202 @@ Views.dashboard = () => {
             if (container) container.innerHTML = regularTxHTML;
         };
         
+        const updateSliderUI = () => {
+            const slider = document.getElementById('chart-months-slider');
+            const label = document.getElementById('chart-months-label');
+            const modeToggle = document.getElementById('chart-view-mode-toggle');
+            if (!slider || !label) return;
+
+            if (currentType === 'all') {
+                if (modeToggle) modeToggle.style.display = 'none';
+                slider.min = 1;
+                slider.max = allTxLimitValues.length;
+                slider.value = currentAllTxIdx;
+                label.textContent = 'Last ' + allTxLimitValues[currentAllTxIdx - 1];
+            } else {
+                if (modeToggle) modeToggle.style.display = 'flex';
+                if (currentViewMode === 'monthly') {
+                    slider.min = 2;
+                    slider.max = 12;
+                    slider.value = currentMonthlyMonths;
+                    label.textContent = currentMonthlyMonths + ' Mos';
+                } else {
+                    slider.min = 1;
+                    slider.max = 6;
+                    slider.value = currentDailyMonths;
+                    label.textContent = currentDailyMonths + (currentDailyMonths === 1 ? ' Mo' : ' Mos');
+                }
+            }
+        };
+
         const renderChart = () => {
             isDateFiltered = false;
             const container = document.getElementById('dashboard-tx-container');
             if (container) container.innerHTML = regularTxHTML;
 
-            const chartData = DataManager.getChartData(currentType, currentMonths);
-            
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+
             const textColor = '#9ca3af';
             const gridColor = 'rgba(255, 255, 255, 0.05)';
-            
+
+            // ── All Transactions view ──────────────────────────────────────
+            if (currentType === 'all') {
+                const limit = allTxLimitValues[currentAllTxIdx - 1];
+                const chartData = DataManager.getAllTransactionsChartData(limit);
+
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Transaction Amount',
+                            data: chartData.data,
+                            backgroundColor: chartData.colors,
+                            borderColor: chartData.borderColors,
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(items) {
+                                        const idx = items[0].dataIndex;
+                                        return chartData.descriptions[idx];
+                                    },
+                                    label: function(context) {
+                                        return DataManager.formatCurrency(context.raw);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                grid: { color: gridColor },
+                                ticks: {
+                                    color: textColor,
+                                    callback: function(value) {
+                                        if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + 'k';
+                                        return value;
+                                    }
+                                }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    color: textColor,
+                                    maxTicksLimit: 12,
+                                    maxRotation: 0
+                                }
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+            // ── Monthly grouped view ───────────────────────────────────────
+            if (currentViewMode === 'monthly') {
+                const chartData = DataManager.getMonthlyChartData(currentType, currentMonthlyMonths);
+
+                let lineColor, bgColor;
+                if (currentType === 'expense') { lineColor = '#ef4444'; bgColor = 'rgba(239, 68, 68, 0.7)'; }
+                else if (currentType === 'income') { lineColor = '#10b981'; bgColor = 'rgba(16, 185, 129, 0.7)'; }
+                else if (currentType === 'moneyinhand') { lineColor = '#f59e0b'; bgColor = 'rgba(245, 158, 11, 0.7)'; }
+                else { lineColor = '#6366f1'; bgColor = 'rgba(99, 102, 241, 0.7)'; }
+
+                let chartLabel = currentType.charAt(0).toUpperCase() + currentType.slice(1);
+                if (currentType === 'networth') chartLabel = 'Net Worth';
+                if (currentType === 'moneyinhand') chartLabel = 'Money in Hand';
+
+                const isRunning = currentType === 'networth' || currentType === 'moneyinhand';
+
+                chartInstance = new Chart(ctx, {
+                    type: isRunning ? 'line' : 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: chartLabel,
+                            data: chartData.data,
+                            borderColor: lineColor,
+                            backgroundColor: bgColor,
+                            borderWidth: isRunning ? 2 : 1,
+                            borderRadius: isRunning ? 0 : 4,
+                            pointBackgroundColor: lineColor,
+                            pointRadius: isRunning ? 4 : 0,
+                            pointHoverRadius: isRunning ? 6 : 0,
+                            fill: isRunning,
+                            tension: isRunning ? 0.3 : 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: (event, elements, chart) => {
+                            if (elements.length > 0) {
+                                const clickedLabel = chart.data.labels[elements[0].index];
+                                const filtered = allDashboardTxs.filter(t => {
+                                    const td = new Date(t.date);
+                                    return td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) === clickedLabel;
+                                });
+                                const txContainer = document.getElementById('dashboard-tx-container');
+                                if (txContainer) {
+                                    isDateFiltered = true;
+                                    txContainer.innerHTML = filtered.length > 0
+                                        ? Components.transactionTable(filtered)
+                                        : Components.emptyState('receipt_long', 'No transactions', `No transactions in ${clickedLabel}.`);
+                                }
+                            } else {
+                                restoreDashboardTx();
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return DataManager.formatCurrency(context.raw);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: !isRunning,
+                                grid: { color: gridColor },
+                                ticks: {
+                                    color: textColor,
+                                    callback: function(value) {
+                                        if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + 'k';
+                                        return value;
+                                    }
+                                }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: textColor, maxRotation: 0 }
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+            // ── Daily view (original behaviour) ───────────────────────────
+            const chartData = DataManager.getChartData(currentType, currentDailyMonths);
+
             let lineColor, bgColor;
             if (currentType === 'expense') { lineColor = '#ef4444'; bgColor = 'rgba(239, 68, 68, 0.1)'; }
             else if (currentType === 'income') { lineColor = '#10b981'; bgColor = 'rgba(16, 185, 129, 0.1)'; }
             else if (currentType === 'moneyinhand') { lineColor = '#f59e0b'; bgColor = 'rgba(245, 158, 11, 0.1)'; }
             else { lineColor = '#6366f1'; bgColor = 'rgba(99, 102, 241, 0.1)'; }
-
-            if (chartInstance) {
-                chartInstance.destroy();
-            }
 
             let chartLabel = currentType.charAt(0).toUpperCase() + currentType.slice(1);
             if (currentType === 'networth') chartLabel = 'Net Worth';
@@ -159,9 +340,10 @@ Views.dashboard = () => {
 
         if (typeof Chart !== 'undefined') {
             renderChart();
+            updateSliderUI();
         } else {
             // Retry once if CDN is slow
-            setTimeout(renderChart, 500);
+            setTimeout(() => { renderChart(); updateSliderUI(); }, 500);
         }
 
         const onDocClick = (e) => {
@@ -189,13 +371,38 @@ Views.dashboard = () => {
                 e.target.style.background = 'var(--primary)';
                 e.target.style.color = 'white';
                 currentType = e.target.getAttribute('data-type');
+                updateSliderUI();
+                renderChart();
+            });
+        });
+
+        document.querySelectorAll('.chart-mode-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.chart-mode-btn').forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--text-secondary)';
+                });
+                e.target.style.background = 'var(--primary)';
+                e.target.style.color = 'white';
+                currentViewMode = e.target.getAttribute('data-mode');
+                updateSliderUI();
                 renderChart();
             });
         });
 
         document.getElementById('chart-months-slider').addEventListener('input', (e) => {
-            currentMonths = parseInt(e.target.value);
-            document.getElementById('chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
+            const val = parseInt(e.target.value);
+            const label = document.getElementById('chart-months-label');
+            if (currentType === 'all') {
+                currentAllTxIdx = val;
+                label.textContent = 'Last ' + allTxLimitValues[val - 1];
+            } else if (currentViewMode === 'monthly') {
+                currentMonthlyMonths = val;
+                label.textContent = val + ' Mos';
+            } else {
+                currentDailyMonths = val;
+                label.textContent = val + (val === 1 ? ' Mo' : ' Mos');
+            }
             renderChart();
         });
 
@@ -249,11 +456,16 @@ Views.dashboard = () => {
                                 <button class="btn chart-tab" data-type="income" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Income</button>
                                 <button class="btn chart-tab" data-type="networth" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Net Worth</button>
                                 <button class="btn chart-tab" data-type="moneyinhand" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Money in Hand</button>
+                                <button class="btn chart-tab" data-type="all" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">All Transactions</button>
+                            </div>
+                            <div id="chart-view-mode-toggle" style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                                <button class="btn chart-mode-btn" data-mode="daily" style="padding: 5px 12px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 13px;">Daily</button>
+                                <button class="btn chart-mode-btn" data-mode="monthly" style="padding: 5px 12px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px;">Monthly</button>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
                                 <span class="material-icons-round text-secondary" style="font-size: 18px;">date_range</span>
                                 <input type="range" id="chart-months-slider" min="1" max="6" value="1" style="width: 100px; accent-color: var(--primary);">
-                                <span id="chart-months-label" style="font-weight: 600; width: 45px; text-align: right;">1 Mo</span>
+                                <span id="chart-months-label" style="font-weight: 600; width: 60px; text-align: right;">1 Mo</span>
                             </div>
                         </div>
                     </div>
