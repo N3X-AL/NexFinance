@@ -377,8 +377,43 @@
     #global-add-btn .material-icons-round {
         margin: 0;
     }
+
+    #global-transfer-btn .btn-text {
+        display: none;
+    }
+
+    #global-transfer-btn {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: 50%;
+    }
+
+    #global-transfer-btn .material-icons-round {
+        margin: 0;
+    }
     
     .grid-cols-2, .grid-cols-3, .grid-cols-4 {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Chart type tabs — horizontally scrollable on mobile */
+@media (max-width: 768px) {
+    .chart-type-tabs {
+        overflow-x: auto;
+        max-width: 100%;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        flex-shrink: 0;
+    }
+
+    .chart-type-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .chart-type-tabs .btn {
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 }

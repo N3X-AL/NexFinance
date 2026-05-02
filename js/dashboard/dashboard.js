@@ -47,12 +47,10 @@ Views.dashboard = () => {
         if (!document.getElementById('main-dashboard-chart')) return;
         
         const ctx = document.getElementById('main-dashboard-chart').getContext('2d');
-        let currentType = 'expense';
+        let currentType = 'both';
         let currentViewMode = 'daily'; // 'daily' | 'monthly'
         let currentDailyMonths = 1;
         let currentMonthlyMonths = 6;
-        let currentAllTxIdx = 2; // slider position (1-based); maps to allTxLimitValues[idx-1]
-        const allTxLimitValues = [10, 20, 30, 50, 100];
         let chartInstance = null;
         let isDateFiltered = false;
         const _now = new Date();
@@ -75,39 +73,29 @@ Views.dashboard = () => {
             const monthPicker = document.getElementById('chart-month-picker');
             if (!slider || !label) return;
 
-            if (currentType === 'all') {
-                if (modeToggle) modeToggle.style.display = 'none';
+            if (modeToggle) modeToggle.style.display = 'flex';
+            if (currentViewMode === 'monthly') {
+                if (sliderContainer) sliderContainer.style.display = 'none';
+                if (monthPicker) {
+                    monthPicker.style.display = 'flex';
+                    const yearSelect = document.getElementById('chart-year-select');
+                    if (yearSelect && !yearSelect.dataset.populated) {
+                        const years = DataManager.getTransactionYears();
+                        yearSelect.innerHTML = years.map(y => `<option value="${y}"${y === currentMonthlyYear ? ' selected' : ''}>${y}</option>`).join('');
+                        yearSelect.dataset.populated = '1';
+                    }
+                    const monthSelect = document.getElementById('chart-month-select');
+                    if (monthSelect) monthSelect.value = currentMonthlyMonth;
+                    const yearSelectEl = document.getElementById('chart-year-select');
+                    if (yearSelectEl) yearSelectEl.value = currentMonthlyYear;
+                }
+            } else {
                 if (sliderContainer) sliderContainer.style.display = 'flex';
                 if (monthPicker) monthPicker.style.display = 'none';
                 slider.min = 1;
-                slider.max = allTxLimitValues.length;
-                slider.value = currentAllTxIdx;
-                label.textContent = 'Last ' + allTxLimitValues[currentAllTxIdx - 1];
-            } else {
-                if (modeToggle) modeToggle.style.display = 'flex';
-                if (currentViewMode === 'monthly') {
-                    if (sliderContainer) sliderContainer.style.display = 'none';
-                    if (monthPicker) {
-                        monthPicker.style.display = 'flex';
-                        const yearSelect = document.getElementById('chart-year-select');
-                        if (yearSelect && !yearSelect.dataset.populated) {
-                            const years = DataManager.getTransactionYears();
-                            yearSelect.innerHTML = years.map(y => `<option value="${y}"${y === currentMonthlyYear ? ' selected' : ''}>${y}</option>`).join('');
-                            yearSelect.dataset.populated = '1';
-                        }
-                        const monthSelect = document.getElementById('chart-month-select');
-                        if (monthSelect) monthSelect.value = currentMonthlyMonth;
-                        const yearSelectEl = document.getElementById('chart-year-select');
-                        if (yearSelectEl) yearSelectEl.value = currentMonthlyYear;
-                    }
-                } else {
-                    if (sliderContainer) sliderContainer.style.display = 'flex';
-                    if (monthPicker) monthPicker.style.display = 'none';
-                    slider.min = 1;
-                    slider.max = 6;
-                    slider.value = currentDailyMonths;
-                    label.textContent = currentDailyMonths + (currentDailyMonths === 1 ? ' Mo' : ' Mos');
-                }
+                slider.max = 6;
+                slider.value = currentDailyMonths;
+                label.textContent = currentDailyMonths + (currentDailyMonths === 1 ? ' Mo' : ' Mos');
             }
         };
 
@@ -124,43 +112,86 @@ Views.dashboard = () => {
             const textColor = '#9ca3af';
             const gridColor = 'rgba(255, 255, 255, 0.05)';
 
-            // ── All Transactions view ──────────────────────────────────────
-            if (currentType === 'all') {
-                const limit = allTxLimitValues[currentAllTxIdx - 1];
-                const chartData = DataManager.getAllTransactionsChartData(limit);
+            // ── Both (Income + Expense) combined view ─────────────────────
+            if (currentType === 'both') {
+                const incomeData = currentViewMode === 'monthly'
+                    ? DataManager.getDailyChartDataForMonth('income', currentMonthlyYear, currentMonthlyMonth)
+                    : DataManager.getChartData('income', currentDailyMonths);
+                const expenseData = currentViewMode === 'monthly'
+                    ? DataManager.getDailyChartDataForMonth('expense', currentMonthlyYear, currentMonthlyMonth)
+                    : DataManager.getChartData('expense', currentDailyMonths);
+
+                // Merge and sort labels chronologically
+                const labelSet = new Set([...incomeData.labels, ...expenseData.labels]);
+                const _refNow = new Date();
+                const _refYear = _refNow.getFullYear();
+                const parseLabel = (lbl) => {
+                    const d = new Date(`${lbl}, ${_refYear}`);
+                    return d > _refNow ? new Date(`${lbl}, ${_refYear - 1}`) : d;
+                };
+                const allLabels = [...labelSet].sort((a, b) => parseLabel(a) - parseLabel(b));
+
+                const incomeMap = {};
+                incomeData.labels.forEach((l, i) => { incomeMap[l] = incomeData.data[i]; });
+                const expenseMap = {};
+                expenseData.labels.forEach((l, i) => { expenseMap[l] = expenseData.data[i]; });
 
                 chartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: chartData.labels,
-                        datasets: [{
-                            label: 'Transaction Amount',
-                            data: chartData.data,
-                            backgroundColor: chartData.colors,
-                            borderColor: chartData.borderColors,
-                            borderWidth: 1,
-                            borderRadius: 4
-                        }]
+                        labels: allLabels,
+                        datasets: [
+                            {
+                                label: 'Income',
+                                data: allLabels.map(l => incomeMap[l] || 0),
+                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                                borderColor: '#10b981',
+                                borderWidth: 1,
+                                borderRadius: 4
+                            },
+                            {
+                                label: 'Expense',
+                                data: allLabels.map(l => expenseMap[l] || 0),
+                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                                borderColor: '#ef4444',
+                                borderWidth: 1,
+                                borderRadius: 4
+                            }
+                        ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        onClick: (event, elements, chart) => {
+                            if (elements.length > 0) {
+                                const clickedLabel = chart.data.labels[elements[0].index];
+                                const filtered = allDashboardTxs.filter(t =>
+                                    new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === clickedLabel
+                                );
+                                const txContainer = document.getElementById('dashboard-tx-container');
+                                if (txContainer) {
+                                    isDateFiltered = true;
+                                    txContainer.innerHTML = filtered.length > 0
+                                        ? Components.transactionTable(filtered)
+                                        : Components.emptyState('receipt_long', 'No transactions', `No transactions on ${clickedLabel}.`);
+                                }
+                            } else {
+                                restoreDashboardTx();
+                            }
+                        },
                         plugins: {
-                            legend: { display: false },
+                            legend: { display: true, labels: { color: textColor } },
                             tooltip: {
                                 callbacks: {
-                                    title: function(items) {
-                                        const idx = items[0].dataIndex;
-                                        return chartData.descriptions[idx];
-                                    },
                                     label: function(context) {
-                                        return DataManager.formatCurrency(context.raw);
+                                        return context.dataset.label + ': ' + DataManager.formatCurrency(context.raw);
                                     }
                                 }
                             }
                         },
                         scales: {
                             y: {
+                                beginAtZero: true,
                                 grid: { color: gridColor },
                                 ticks: {
                                     color: textColor,
@@ -409,13 +440,8 @@ Views.dashboard = () => {
         document.getElementById('chart-months-slider').addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             const label = document.getElementById('chart-months-label');
-            if (currentType === 'all') {
-                currentAllTxIdx = val;
-                label.textContent = 'Last ' + allTxLimitValues[val - 1];
-            } else {
-                currentDailyMonths = val;
-                label.textContent = val + (val === 1 ? ' Mo' : ' Mos');
-            }
+            currentDailyMonths = val;
+            label.textContent = val + (val === 1 ? ' Mo' : ' Mos');
             renderChart();
         });
 
@@ -480,12 +506,12 @@ Views.dashboard = () => {
                     <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
                         <h3 class="card-title">Financial Trends</h3>
                         <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                            <div style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
-                                <button class="btn chart-tab active" data-type="expense" style="padding: 6px 16px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md);">Expense</button>
+                            <div class="chart-type-tabs" style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                                <button class="btn chart-tab" data-type="expense" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Expense</button>
                                 <button class="btn chart-tab" data-type="income" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Income</button>
                                 <button class="btn chart-tab" data-type="networth" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Net Worth</button>
                                 <button class="btn chart-tab" data-type="moneyinhand" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">Money in Hand</button>
-                                <button class="btn chart-tab" data-type="all" style="padding: 6px 16px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md);">All Transactions</button>
+                                <button class="btn chart-tab active" data-type="both" style="padding: 6px 16px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md);">Both</button>
                             </div>
                             <div id="chart-view-mode-toggle" style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
                                 <button class="btn chart-mode-btn" data-mode="daily" style="padding: 5px 12px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 13px;">Daily</button>
