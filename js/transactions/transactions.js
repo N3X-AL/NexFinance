@@ -12,6 +12,10 @@ Views.transactions = () => {
         let chartInstance = null;
         let isDateFiltered = false;
         let currentChartType = 'net'; // 'net' | 'income' | 'expense'
+        let currentViewMode = 'daily'; // 'daily' | 'monthly'
+        const _txNow = new Date();
+        let currentMonthlyMonth = _txNow.getMonth();
+        let currentMonthlyYear = _txNow.getFullYear();
 
         const restoreTransactionView = () => {
             isDateFiltered = false;
@@ -19,23 +23,58 @@ Views.transactions = () => {
             if (container) container.innerHTML = regularHTML;
         };
 
+        const updateTxViewModeUI = () => {
+            const sliderContainer = document.getElementById('tx-chart-slider-container');
+            const monthPicker = document.getElementById('tx-chart-month-picker');
+            if (currentViewMode === 'monthly') {
+                if (sliderContainer) sliderContainer.style.display = 'none';
+                if (monthPicker) {
+                    monthPicker.style.display = 'flex';
+                    const yearSelect = document.getElementById('tx-chart-year-select');
+                    if (yearSelect && !yearSelect.dataset.populated) {
+                        const years = DataManager.getTransactionYears();
+                        yearSelect.innerHTML = years.map(y => `<option value="${y}"${y === currentMonthlyYear ? ' selected' : ''}>${y}</option>`).join('');
+                        yearSelect.dataset.populated = '1';
+                    }
+                    const monthSelect = document.getElementById('tx-chart-month-select');
+                    if (monthSelect) monthSelect.value = currentMonthlyMonth;
+                    const yearSelectEl = document.getElementById('tx-chart-year-select');
+                    if (yearSelectEl) yearSelectEl.value = currentMonthlyYear;
+                }
+            } else {
+                if (sliderContainer) sliderContainer.style.display = 'flex';
+                if (monthPicker) monthPicker.style.display = 'none';
+            }
+        };
+
         const renderChart = () => {
             isDateFiltered = false;
             const ctx = document.getElementById('tx-cashflow-chart-canvas').getContext('2d');
-
-            const now = new Date();
-            now.setHours(23, 59, 59, 999);
-            const startDate = new Date(now);
-            startDate.setMonth(startDate.getMonth() - currentMonths);
-            startDate.setHours(0, 0, 0, 0);
 
             let labels, data, chartColor, chartBorderColor, statLabel, statColor;
 
             if (currentChartType === 'net') {
                 // Group all transactions by day, summing net
+                let filteredTxs;
+                if (currentViewMode === 'monthly') {
+                    const startDate = new Date(currentMonthlyYear, currentMonthlyMonth, 1);
+                    startDate.setHours(0, 0, 0, 0);
+                    const endDate = new Date(currentMonthlyYear, currentMonthlyMonth + 1, 0);
+                    endDate.setHours(23, 59, 59, 999);
+                    filteredTxs = regularTxs.filter(t => {
+                        const d = new Date(t.date);
+                        return d >= startDate && d <= endDate;
+                    });
+                } else {
+                    const now = new Date();
+                    now.setHours(23, 59, 59, 999);
+                    const startDate = new Date(now);
+                    startDate.setMonth(startDate.getMonth() - currentMonths);
+                    startDate.setHours(0, 0, 0, 0);
+                    filteredTxs = regularTxs.filter(t => new Date(t.date) >= startDate);
+                }
                 const grouped = {};
-                regularTxs
-                    .filter(t => new Date(t.date) >= startDate)
+                filteredTxs
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .forEach(t => {
                         const d = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -56,7 +95,9 @@ Views.transactions = () => {
                 if (legendEl) legendEl.style.display = 'flex';
             } else {
                 // Use DataManager for income/expense data
-                const chartData = DataManager.getChartData(currentChartType, currentMonths);
+                const chartData = currentViewMode === 'monthly'
+                    ? DataManager.getDailyChartDataForMonth(currentChartType, currentMonthlyYear, currentMonthlyMonth)
+                    : DataManager.getChartData(currentChartType, currentMonths);
                 labels = chartData.labels;
                 data = chartData.data;
                 const total = data.reduce((a, b) => a + b, 0);
@@ -204,6 +245,7 @@ Views.transactions = () => {
 
         if (typeof Chart !== 'undefined') {
             renderChart();
+            updateTxViewModeUI();
         }
 
         const onDocClick = (e) => {
@@ -234,11 +276,41 @@ Views.transactions = () => {
             });
         });
 
+        document.querySelectorAll('.tx-chart-mode-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tx-chart-mode-btn').forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--text-secondary)';
+                });
+                e.currentTarget.style.background = 'var(--primary)';
+                e.currentTarget.style.color = 'white';
+                currentViewMode = e.currentTarget.getAttribute('data-mode');
+                updateTxViewModeUI();
+                renderChart();
+            });
+        });
+
         document.getElementById('tx-chart-months-slider').addEventListener('input', (e) => {
             currentMonths = parseInt(e.target.value);
             document.getElementById('tx-chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
             renderChart();
         });
+
+        const txMonthSelectEl = document.getElementById('tx-chart-month-select');
+        if (txMonthSelectEl) {
+            txMonthSelectEl.addEventListener('change', (e) => {
+                currentMonthlyMonth = parseInt(e.target.value);
+                renderChart();
+            });
+        }
+
+        const txYearSelectEl = document.getElementById('tx-chart-year-select');
+        if (txYearSelectEl) {
+            txYearSelectEl.addEventListener('change', (e) => {
+                currentMonthlyYear = parseInt(e.target.value);
+                renderChart();
+            });
+        }
 
     }, 50);
 
@@ -246,8 +318,8 @@ Views.transactions = () => {
         <div class="card animate-slide-up" style="margin-bottom: 24px;">
             <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
                 <div>
-                    <h3 class="card-title">Daily Cashflow</h3>
-                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Tap to see that day's transactions</p>
+                    <h3 class="card-title">Cashflow</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Tap a bar to see that day's transactions</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     <div class="chart-type-tabs" style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
@@ -255,10 +327,32 @@ Views.transactions = () => {
                         <button class="btn tx-chart-tab" data-type="income" style="padding: 6px 14px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px;">Income</button>
                         <button class="btn tx-chart-tab" data-type="expense" style="padding: 6px 14px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px;">Expense</button>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                    <div style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                        <button class="btn tx-chart-mode-btn" data-mode="daily" style="padding: 5px 12px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 13px;">Daily</button>
+                        <button class="btn tx-chart-mode-btn" data-mode="monthly" style="padding: 5px 12px; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-md); font-size: 13px;">Monthly</button>
+                    </div>
+                    <div id="tx-chart-slider-container" style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
                         <span class="material-icons-round text-secondary" style="font-size: 18px;">date_range</span>
                         <input type="range" id="tx-chart-months-slider" min="1" max="6" value="1" style="width: 80px; accent-color: var(--primary);">
                         <span id="tx-chart-months-label" style="font-weight: 600; width: 45px; text-align: right;">1 Mo</span>
+                    </div>
+                    <div id="tx-chart-month-picker" style="display: none; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                        <span class="material-icons-round text-secondary" style="font-size: 18px;">calendar_month</span>
+                        <select id="tx-chart-month-select" style="background: transparent; border: none; color: var(--text-primary); font-size: 13px; outline: none; cursor: pointer;">
+                            <option value="0">January</option>
+                            <option value="1">February</option>
+                            <option value="2">March</option>
+                            <option value="3">April</option>
+                            <option value="4">May</option>
+                            <option value="5">June</option>
+                            <option value="6">July</option>
+                            <option value="7">August</option>
+                            <option value="8">September</option>
+                            <option value="9">October</option>
+                            <option value="10">November</option>
+                            <option value="11">December</option>
+                        </select>
+                        <select id="tx-chart-year-select" style="background: transparent; border: none; color: var(--text-primary); font-size: 13px; outline: none; cursor: pointer;"></select>
                     </div>
                 </div>
             </div>
