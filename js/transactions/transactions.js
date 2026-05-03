@@ -13,9 +13,9 @@ Views.transactions = () => {
         let isDateFiltered = false;
         let currentChartType = 'net'; // 'net' | 'income' | 'expense'
         let currentViewMode = 'daily'; // 'daily' | 'monthly'
-        const _txNow = new Date();
-        let currentMonthlyMonth = _txNow.getMonth();
-        let currentMonthlyYear = _txNow.getFullYear();
+        const txNow = new Date();
+        let currentMonthlyMonth = txNow.getMonth();
+        let currentMonthlyYear = txNow.getFullYear();
 
         const restoreTransactionView = () => {
             isDateFiltered = false;
@@ -26,15 +26,17 @@ Views.transactions = () => {
         const updateTxViewModeUI = () => {
             const sliderContainer = document.getElementById('tx-chart-slider-container');
             const monthPicker = document.getElementById('tx-chart-month-picker');
+            const titleEl = document.getElementById('tx-chart-title');
             if (currentViewMode === 'monthly') {
+                if (titleEl) titleEl.textContent = 'Monthly Cashflow';
                 if (sliderContainer) sliderContainer.style.display = 'none';
                 if (monthPicker) {
                     monthPicker.style.display = 'flex';
                     const yearSelect = document.getElementById('tx-chart-year-select');
-                    if (yearSelect && !yearSelect.dataset.populated) {
+                    if (yearSelect && yearSelect.dataset.populated !== 'true') {
                         const years = DataManager.getTransactionYears();
                         yearSelect.innerHTML = years.map(y => `<option value="${y}"${y === currentMonthlyYear ? ' selected' : ''}>${y}</option>`).join('');
-                        yearSelect.dataset.populated = '1';
+                        yearSelect.dataset.populated = 'true';
                     }
                     const monthSelect = document.getElementById('tx-chart-month-select');
                     if (monthSelect) monthSelect.value = currentMonthlyMonth;
@@ -42,6 +44,7 @@ Views.transactions = () => {
                     if (yearSelectEl) yearSelectEl.value = currentMonthlyYear;
                 }
             } else {
+                if (titleEl) titleEl.textContent = 'Daily Cashflow';
                 if (sliderContainer) sliderContainer.style.display = 'flex';
                 if (monthPicker) monthPicker.style.display = 'none';
             }
@@ -318,7 +321,7 @@ Views.transactions = () => {
         <div class="card animate-slide-up" style="margin-bottom: 24px;">
             <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
                 <div>
-                    <h3 class="card-title">Cashflow</h3>
+                    <h3 class="card-title" id="tx-chart-title">Daily Cashflow</h3>
                     <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Tap a bar to see that day's transactions</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
