@@ -247,7 +247,7 @@ Views.transactions = () => {
             <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
                 <div>
                     <h3 class="card-title">Daily Cashflow</h3>
-                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Tap a bar to see that day's transactions</p>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Tap to see that day's transactions</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     <div class="chart-type-tabs" style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
