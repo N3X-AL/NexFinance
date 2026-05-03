@@ -85,74 +85,121 @@ Views.transactions = () => {
 
             if (chartInstance) chartInstance.destroy();
 
-            chartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: currentChartType === 'net' ? 'Net' : currentChartType === 'income' ? 'Income' : 'Expense',
-                        data,
-                        backgroundColor: chartColor,
-                        borderColor: chartBorderColor,
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    onClick: (event, elements, chart) => {
-                        if (elements.length > 0) {
-                            const clickedLabel = chart.data.labels[elements[0].index];
-                            let txsForDay = regularTxs.filter(t =>
-                                new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === clickedLabel
-                            );
-                            if (currentChartType === 'income') txsForDay = txsForDay.filter(t => t.amount > 0);
-                            if (currentChartType === 'expense') txsForDay = txsForDay.filter(t => t.amount < 0);
-                            const txContainer = document.getElementById('transactions-page-container');
-                            if (txContainer) {
-                                isDateFiltered = true;
-                                txContainer.innerHTML = txsForDay.length > 0
-                                    ? Components.transactionTable(txsForDay)
-                                    : Components.emptyState('receipt_long', 'No transactions', 'No transactions on ' + clickedLabel + '.');
-                            }
-                        } else {
-                            restoreTransactionView();
-                        }
+            const onChartClick = (event, elements, chart) => {
+                if (elements.length > 0) {
+                    const clickedLabel = chart.data.labels[elements[0].index];
+                    let txsForDay = regularTxs.filter(t =>
+                        new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === clickedLabel
+                    );
+                    if (currentChartType === 'income') txsForDay = txsForDay.filter(t => t.amount > 0);
+                    if (currentChartType === 'expense') txsForDay = txsForDay.filter(t => t.amount < 0);
+                    const txContainer = document.getElementById('transactions-page-container');
+                    if (txContainer) {
+                        isDateFiltered = true;
+                        txContainer.innerHTML = txsForDay.length > 0
+                            ? Components.transactionTable(txsForDay)
+                            : Components.emptyState('receipt_long', 'No transactions', 'No transactions on ' + clickedLabel + '.');
+                    }
+                } else {
+                    restoreTransactionView();
+                }
+            };
+
+            const tickCallback = function(value) {
+                if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + 'k';
+                return value;
+            };
+
+            if (currentChartType === 'net') {
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Net',
+                            data,
+                            backgroundColor: chartColor,
+                            borderColor: chartBorderColor,
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
                     },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const val = context.raw;
-                                    if (currentChartType === 'net') {
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: onChartClick,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const val = context.raw;
                                         const sign = val >= 0 ? '+' : '';
                                         return sign + DataManager.formatCurrency(val);
                                     }
-                                    return DataManager.formatCurrency(val);
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: {
-                                color: '#9ca3af',
-                                callback: function(value) {
-                                    if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + 'k';
-                                    return value;
                                 }
                             }
                         },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#9ca3af', maxTicksLimit: 8, maxRotation: 0 }
+                        scales: {
+                            y: {
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#9ca3af', callback: tickCallback }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#9ca3af', maxTicksLimit: 8, maxRotation: 0 }
+                            }
                         }
                     }
-                }
-            });
+                });
+            } else {
+                // Income/Expense — filled line chart matching dashboard style
+                chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: currentChartType === 'income' ? 'Income' : 'Expense',
+                            data,
+                            borderColor: chartBorderColor,
+                            backgroundColor: currentChartType === 'income' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                            borderWidth: 2,
+                            pointBackgroundColor: chartBorderColor,
+                            pointRadius: data.length > 45 ? 0 : 3,
+                            pointHitRadius: 10,
+                            pointHoverRadius: 6,
+                            fill: true,
+                            tension: 0.2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: onChartClick,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return DataManager.formatCurrency(context.raw);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#9ca3af', callback: tickCallback }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#9ca3af', maxTicksLimit: 8, maxRotation: 0 }
+                            }
+                        }
+                    }
+                });
+            }
         };
 
         if (typeof Chart !== 'undefined') {
