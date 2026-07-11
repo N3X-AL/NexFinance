@@ -86,7 +86,6 @@ Views.transactions = () => {
         };
 
         const renderChart = () => {
-            isDateFiltered = false;
             const ctx = document.getElementById('tx-cashflow-chart-canvas').getContext('2d');
 
             let labels, data, chartColor, chartBorderColor, statLabel, statColor;
@@ -302,6 +301,7 @@ Views.transactions = () => {
                 e.currentTarget.style.background = 'var(--primary)';
                 e.currentTarget.style.color = 'white';
                 currentChartType = e.currentTarget.getAttribute('data-type');
+                isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
         });
@@ -316,6 +316,7 @@ Views.transactions = () => {
                 e.currentTarget.style.color = 'white';
                 currentViewMode = e.currentTarget.getAttribute('data-mode');
                 updateTxViewModeUI();
+                isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
         });
@@ -323,6 +324,7 @@ Views.transactions = () => {
         document.getElementById('tx-chart-months-slider').addEventListener('input', (e) => {
             currentMonths = parseInt(e.target.value);
             document.getElementById('tx-chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
+            isDateFiltered = false; currentDateFilterLabel = null;
             renderChart();
         });
 
@@ -330,6 +332,7 @@ Views.transactions = () => {
         if (txMonthSelectEl) {
             txMonthSelectEl.addEventListener('change', (e) => {
                 currentMonthlyMonth = parseInt(e.target.value);
+                isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
         }
@@ -338,6 +341,7 @@ Views.transactions = () => {
         if (txYearSelectEl) {
             txYearSelectEl.addEventListener('change', (e) => {
                 currentMonthlyYear = parseInt(e.target.value);
+                isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
         }

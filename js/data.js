@@ -270,7 +270,7 @@ const DataManager = {
         return { labels, data };
     },
 
-    getMonthlyChartData: (type, months) => {
+    getMonthlyChartData: (type, months, category = null) => {
         const now = new Date();
         const labels = [];
         const data = [];
@@ -500,6 +500,7 @@ const DataManager = {
     addTransaction: (transaction) => {
         if (transaction.category) {
             transaction.category = transaction.category.trim();
+            if (transaction.category === '') transaction.category = 'Uncategorized';
         }
         const newId = appData.transactions.length > 0 ? Math.max(...appData.transactions.map(t => t.id)) + 1 : 1;
         appData.transactions.push({ id: newId, createdAt: new Date().toISOString(), ...transaction });
@@ -546,6 +547,7 @@ const DataManager = {
     editTransaction: (id, updatedTransaction) => {
         if (updatedTransaction.category) {
             updatedTransaction.category = updatedTransaction.category.trim();
+            if (updatedTransaction.category === '') updatedTransaction.category = 'Uncategorized';
         }
         const index = appData.transactions.findIndex(t => t.id === id);
         if (index !== -1) {
@@ -915,6 +917,7 @@ if (!appData?.migratedTrimCategories) {
         appData.transactions.forEach(t => {
             if (t.category) {
                 t.category = t.category.trim();
+                if (t.category === '') t.category = 'Uncategorized';
             }
         });
     }
