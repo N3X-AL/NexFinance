@@ -18,23 +18,43 @@ Views.transactions = () => {
         let currentMonthlyYear = txNow.getFullYear();
 
         let currentCategory = 'all';
+        let currentDateFilterLabel = null;
 
         const renderTransactionsTable = () => {
             const container = document.getElementById('transactions-page-container');
             if (!container) return;
 
             let txsToRender = regularTxs;
+
+            // Apply date filter if active
+            if (isDateFiltered && currentDateFilterLabel) {
+                txsToRender = txsToRender.filter(t =>
+                    new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === currentDateFilterLabel
+                );
+                if (currentChartType === 'income') txsToRender = txsToRender.filter(t => t.amount > 0);
+                if (currentChartType === 'expense') txsToRender = txsToRender.filter(t => t.amount < 0);
+            }
+
+            // Apply category filter
             if (currentCategory !== 'all') {
-                txsToRender = regularTxs.filter(t => t.category === currentCategory);
+                txsToRender = txsToRender.filter(t => t.category === currentCategory);
+            }
+
+            let emptyMessage = 'No transactions found';
+            let emptySubMessage = 'No transactions match the selected filter.';
+            if (isDateFiltered) {
+                emptyMessage = 'No transactions';
+                emptySubMessage = 'No transactions on ' + currentDateFilterLabel + (currentCategory !== 'all' ? ' matching the category filter.' : '.');
             }
 
             container.innerHTML = txsToRender.length > 0
                 ? Components.transactionTable(txsToRender)
-                : Components.emptyState('receipt_long', 'No transactions found', 'No transactions match the selected filter.');
+                : Components.emptyState('receipt_long', emptyMessage, emptySubMessage);
         };
 
         const restoreTransactionView = () => {
             isDateFiltered = false;
+            currentDateFilterLabel = null;
             renderTransactionsTable();
         };
 
@@ -145,20 +165,9 @@ Views.transactions = () => {
 
             const onChartClick = (event, elements, chart) => {
                 if (elements.length > 0) {
-                    const clickedLabel = chart.data.labels[elements[0].index];
-                    let txsForDay = regularTxs.filter(t =>
-                        new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === clickedLabel
-                    );
-                    if (currentChartType === 'income') txsForDay = txsForDay.filter(t => t.amount > 0);
-                    if (currentChartType === 'expense') txsForDay = txsForDay.filter(t => t.amount < 0);
-                    if (currentCategory !== 'all') txsForDay = txsForDay.filter(t => t.category === currentCategory);
-                    const txContainer = document.getElementById('transactions-page-container');
-                    if (txContainer) {
-                        isDateFiltered = true;
-                        txContainer.innerHTML = txsForDay.length > 0
-                            ? Components.transactionTable(txsForDay)
-                            : Components.emptyState('receipt_long', 'No transactions', 'No transactions on ' + clickedLabel + ' matching the filter.');
-                    }
+                    currentDateFilterLabel = chart.data.labels[elements[0].index];
+                    isDateFiltered = true;
+                    renderTransactionsTable();
                 } else {
                     restoreTransactionView();
                 }
@@ -334,13 +343,8 @@ Views.transactions = () => {
         if (categoryFilter) {
             categoryFilter.addEventListener('change', (e) => {
                 currentCategory = e.target.value;
-                if (!isDateFiltered) {
-                    renderTransactionsTable();
-                } else {
-                    // Re-trigger chart click effect or just render chart (which resets to restoreTransactionView)
-                    // Just reset the view for simplicity when category changes
-                    restoreTransactionView();
-                }
+                // renderTransactionsTable will apply both currentCategory and currentDateFilterLabel
+                renderTransactionsTable();
             });
         }
 
@@ -412,9 +416,12 @@ Views.transactions = () => {
                 <div style="display: flex; justify-content: space-between; width: 100%;">
                     <h3 class="card-title">All Transactions</h3>
                     <div style="display: flex; gap: 12px; align-items: center;">
-                        <select id="tx-category-filter" style="background: var(--bg-surface-solid); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; padding: 6px 12px; border-radius: var(--radius-md); outline: none; cursor: pointer;">
+                        <select id="tx-category-filter" aria-label="Filter transactions by category" style="background: var(--bg-surface-solid); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; padding: 6px 12px; border-radius: var(--radius-md); outline: none; cursor: pointer;">
                             <option value="all">All Categories</option>
-                            ${[...new Set(regularTxs.map(t => t.category))].sort().map(c => `<option value="${c}">${c}</option>`).join('')}
+                            ${[...new Set(regularTxs.map(t => t.category))].sort().map(c => {
+                                const escaped = (c || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                return `<option value="${escaped}">${escaped}</option>`;
+                            }).join('')}
                         </select>
                         <button class="btn btn-secondary"><span class="material-icons-round" style="font-size: 18px;">download</span> Export</button>
                     </div>
