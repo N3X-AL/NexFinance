@@ -13,7 +13,19 @@ Views.transactions = () => {
         let isDateFiltered = false;
         let currentChartType = 'net'; // 'net' | 'income' | 'expense'
         let currentViewMode = 'daily'; // 'daily' | 'monthly'
-        const txNow = new Date();
+        let txNow = new Date();
+        if (regularTxs.length > 0) {
+            let maxTime = 0;
+            for (const t of regularTxs) {
+                const time = new Date(t.date).getTime();
+                if (!isNaN(time) && time > maxTime) {
+                    maxTime = time;
+                }
+            }
+            if (maxTime > 0) {
+                txNow = new Date(maxTime);
+            }
+        }
         let currentMonthlyMonth = txNow.getMonth();
         let currentMonthlyYear = txNow.getFullYear();
 
@@ -25,6 +37,31 @@ Views.transactions = () => {
             if (!container) return;
 
             let txsToRender = regularTxs;
+
+            if (currentViewMode === 'monthly') {
+                const startDate = new Date(currentMonthlyYear, currentMonthlyMonth, 1);
+                startDate.setHours(0, 0, 0, 0);
+                const endDate = new Date(currentMonthlyYear, currentMonthlyMonth + 1, 0);
+                endDate.setHours(23, 59, 59, 999);
+                txsToRender = txsToRender.filter(t => {
+                    const d = new Date(t.date);
+                    return d >= startDate && d <= endDate;
+                });
+            } else {
+                const now = new Date(txNow);
+                now.setHours(23, 59, 59, 999);
+                const startDate = new Date(now);
+                const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
+                startDate.setMonth(startDate.getMonth() - currentMonths);
+                if (startDate.getMonth() !== expectedMonth) {
+                    startDate.setDate(0);
+                }
+                startDate.setHours(0, 0, 0, 0);
+                txsToRender = txsToRender.filter(t => {
+                    const d = new Date(t.date);
+                    return d >= startDate && d <= now;
+                });
+            }
 
             // Apply date filter if active
             if (isDateFiltered && currentDateFilterLabel) {
@@ -103,10 +140,14 @@ Views.transactions = () => {
                         return d >= startDate && d <= endDate;
                     });
                 } else {
-                    const now = new Date();
+                    const now = new Date(txNow);
                     now.setHours(23, 59, 59, 999);
                     const startDate = new Date(now);
+                    const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
                     startDate.setMonth(startDate.getMonth() - currentMonths);
+                    if (startDate.getMonth() !== expectedMonth) {
+                        startDate.setDate(0);
+                    }
                     startDate.setHours(0, 0, 0, 0);
                     filteredTxs = regularTxs.filter(t => new Date(t.date) >= startDate);
                 }

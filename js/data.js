@@ -193,11 +193,29 @@ const DataManager = {
     getChartData: (type, months, category = null) => {
         const labels = [];
         const data = [];
-        const now = new Date();
+        // Get max date from transactions for a static dataset, otherwise fallback to now
+        const txs = appData.transactions.filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer');
+        let now = new Date();
+        if (txs.length > 0) {
+            let maxTime = 0;
+            for (const t of txs) {
+                const time = new Date(t.date).getTime();
+                if (!isNaN(time) && time > maxTime) {
+                    maxTime = time;
+                }
+            }
+            if (maxTime > 0) {
+                now = new Date(maxTime);
+            }
+        }
         now.setHours(23, 59, 59, 999);
         
         const startDate = new Date(now);
+        const expectedMonth = (startDate.getMonth() - months + 12) % 12;
         startDate.setMonth(startDate.getMonth() - months);
+        if (startDate.getMonth() !== expectedMonth) {
+            startDate.setDate(0);
+        }
         startDate.setHours(0, 0, 0, 0);
 
         if (type === 'income' || type === 'expense') {
