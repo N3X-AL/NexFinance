@@ -17,10 +17,25 @@ Views.transactions = () => {
         let currentMonthlyMonth = txNow.getMonth();
         let currentMonthlyYear = txNow.getFullYear();
 
+        let currentCategory = 'all';
+
+        const renderTransactionsTable = () => {
+            const container = document.getElementById('transactions-page-container');
+            if (!container) return;
+
+            let txsToRender = regularTxs;
+            if (currentCategory !== 'all') {
+                txsToRender = regularTxs.filter(t => t.category === currentCategory);
+            }
+
+            container.innerHTML = txsToRender.length > 0
+                ? Components.transactionTable(txsToRender)
+                : Components.emptyState('receipt_long', 'No transactions found', 'No transactions match the selected filter.');
+        };
+
         const restoreTransactionView = () => {
             isDateFiltered = false;
-            const container = document.getElementById('transactions-page-container');
-            if (container) container.innerHTML = regularHTML;
+            renderTransactionsTable();
         };
 
         const updateTxViewModeUI = () => {
@@ -124,8 +139,7 @@ Views.transactions = () => {
             }
 
             // Reset table
-            const container = document.getElementById('transactions-page-container');
-            if (container) container.innerHTML = regularHTML;
+            renderTransactionsTable();
 
             if (chartInstance) chartInstance.destroy();
 
@@ -137,12 +151,13 @@ Views.transactions = () => {
                     );
                     if (currentChartType === 'income') txsForDay = txsForDay.filter(t => t.amount > 0);
                     if (currentChartType === 'expense') txsForDay = txsForDay.filter(t => t.amount < 0);
+                    if (currentCategory !== 'all') txsForDay = txsForDay.filter(t => t.category === currentCategory);
                     const txContainer = document.getElementById('transactions-page-container');
                     if (txContainer) {
                         isDateFiltered = true;
                         txContainer.innerHTML = txsForDay.length > 0
                             ? Components.transactionTable(txsForDay)
-                            : Components.emptyState('receipt_long', 'No transactions', 'No transactions on ' + clickedLabel + '.');
+                            : Components.emptyState('receipt_long', 'No transactions', 'No transactions on ' + clickedLabel + ' matching the filter.');
                     }
                 } else {
                     restoreTransactionView();
@@ -315,6 +330,20 @@ Views.transactions = () => {
             });
         }
 
+        const categoryFilter = document.getElementById('tx-category-filter');
+        if (categoryFilter) {
+            categoryFilter.addEventListener('change', (e) => {
+                currentCategory = e.target.value;
+                if (!isDateFiltered) {
+                    renderTransactionsTable();
+                } else {
+                    // Re-trigger chart click effect or just render chart (which resets to restoreTransactionView)
+                    // Just reset the view for simplicity when category changes
+                    restoreTransactionView();
+                }
+            });
+        }
+
     }, 50);
 
     return `
@@ -382,7 +411,11 @@ Views.transactions = () => {
             <div class="card-header" style="flex-direction: column; align-items: flex-start; gap: 16px;">
                 <div style="display: flex; justify-content: space-between; width: 100%;">
                     <h3 class="card-title">All Transactions</h3>
-                    <div style="display: flex; gap: 12px;">
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <select id="tx-category-filter" style="background: var(--bg-surface-solid); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; padding: 6px 12px; border-radius: var(--radius-md); outline: none; cursor: pointer;">
+                            <option value="all">All Categories</option>
+                            ${[...new Set(regularTxs.map(t => t.category))].sort().map(c => `<option value="${c}">${c}</option>`).join('')}
+                        </select>
                         <button class="btn btn-secondary"><span class="material-icons-round" style="font-size: 18px;">download</span> Export</button>
                     </div>
                 </div>
