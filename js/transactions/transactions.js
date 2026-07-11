@@ -112,6 +112,9 @@ Views.transactions = () => {
                     filteredTxs = regularTxs.filter(t => new Date(t.date) >= startDate);
                 }
                 const grouped = {};
+                if (currentCategory !== 'all') {
+                    filteredTxs = filteredTxs.filter(t => t.category === currentCategory);
+                }
                 filteredTxs
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .forEach(t => {
@@ -134,8 +137,8 @@ Views.transactions = () => {
             } else {
                 // Use DataManager for income/expense data
                 const chartData = currentViewMode === 'monthly'
-                    ? DataManager.getDailyChartDataForMonth(currentChartType, currentMonthlyYear, currentMonthlyMonth)
-                    : DataManager.getChartData(currentChartType, currentMonths);
+                    ? DataManager.getDailyChartDataForMonth(currentChartType, currentMonthlyYear, currentMonthlyMonth, currentCategory)
+                    : DataManager.getChartData(currentChartType, currentMonths, currentCategory);
                 labels = chartData.labels;
                 data = chartData.data;
                 const total = data.reduce((a, b) => a + b, 0);
@@ -345,6 +348,7 @@ Views.transactions = () => {
                 currentCategory = e.target.value;
                 // renderTransactionsTable will apply both currentCategory and currentDateFilterLabel
                 renderTransactionsTable();
+                renderChart();
             });
         }
 
