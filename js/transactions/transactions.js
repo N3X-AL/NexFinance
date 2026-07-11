@@ -13,8 +13,19 @@ Views.transactions = () => {
         let isDateFiltered = false;
         let currentChartType = 'net'; // 'net' | 'income' | 'expense'
         let currentViewMode = 'daily'; // 'daily' | 'monthly'
-        const maxDate = regularTxs.length > 0 ? new Date(Math.max(...regularTxs.map(t => new Date(t.date)))) : new Date();
-        const txNow = maxDate;
+        let txNow = new Date();
+        if (regularTxs.length > 0) {
+            let maxTime = 0;
+            for (const t of regularTxs) {
+                const time = new Date(t.date).getTime();
+                if (!isNaN(time) && time > maxTime) {
+                    maxTime = time;
+                }
+            }
+            if (maxTime > 0) {
+                txNow = new Date(maxTime);
+            }
+        }
         let currentMonthlyMonth = txNow.getMonth();
         let currentMonthlyYear = txNow.getFullYear();
 
