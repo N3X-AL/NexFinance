@@ -413,9 +413,9 @@ Views.transactions = () => {
 
         <div class="card animate-slide-up">
             <div class="card-header" style="flex-direction: column; align-items: flex-start; gap: 16px;">
-                <div style="display: flex; justify-content: space-between; width: 100%;">
+                <div style="display: flex; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 12px;">
                     <h3 class="card-title">All Transactions</h3>
-                    <div style="display: flex; gap: 12px; align-items: center;">
+                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                         <select id="tx-category-filter" aria-label="Filter transactions by category" style="background: var(--bg-surface-solid); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; padding: 6px 12px; border-radius: var(--radius-md); outline: none; cursor: pointer;">
                             <option value="all">All Categories</option>
                             ${[...new Set(regularTxs.map(t => t.category))].sort().map(c => {
