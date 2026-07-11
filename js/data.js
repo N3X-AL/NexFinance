@@ -190,7 +190,7 @@ const DataManager = {
         };
     },
 
-    getChartData: (type, months) => {
+    getChartData: (type, months, category = null) => {
         const labels = [];
         const data = [];
         const now = new Date();
@@ -210,6 +210,7 @@ const DataManager = {
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
                 })
+                .filter(t => category && category !== 'all' ? t.category === category : true)
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .forEach(t => {
                     const label = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -269,7 +270,7 @@ const DataManager = {
         return { labels, data };
     },
 
-    getMonthlyChartData: (type, months) => {
+    getMonthlyChartData: (type, months, category = null) => {
         const now = new Date();
         const labels = [];
         const data = [];
@@ -288,7 +289,8 @@ const DataManager = {
                         if (tLabel !== label) return false;
                         if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
                         return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
-                    })
+                })
+                .filter(t => category && category !== 'all' ? t.category === category : true)
                     .reduce((s, t) => s + Math.abs(t.amount), 0);
                 data.push(sum);
             });
@@ -329,7 +331,7 @@ const DataManager = {
         return years.sort((a, b) => b - a);
     },
 
-    getDailyChartDataForMonth: (type, year, month) => {
+    getDailyChartDataForMonth: (type, year, month, category = null) => {
         const startDate = new Date(year, month, 1);
         startDate.setHours(0, 0, 0, 0);
         const endDate = new Date(year, month + 1, 0);
@@ -344,6 +346,7 @@ const DataManager = {
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
                 })
+                .filter(t => category && category !== 'all' ? t.category === category : true)
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .forEach(t => {
                     const label = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -495,6 +498,10 @@ const DataManager = {
     },
 
     addTransaction: (transaction) => {
+        if (transaction.category) {
+            transaction.category = transaction.category.trim();
+            if (transaction.category === '') transaction.category = 'Uncategorized';
+        }
         const newId = appData.transactions.length > 0 ? Math.max(...appData.transactions.map(t => t.id)) + 1 : 1;
         appData.transactions.push({ id: newId, createdAt: new Date().toISOString(), ...transaction });
         
@@ -538,6 +545,10 @@ const DataManager = {
     },
 
     editTransaction: (id, updatedTransaction) => {
+        if (updatedTransaction.category) {
+            updatedTransaction.category = updatedTransaction.category.trim();
+            if (updatedTransaction.category === '') updatedTransaction.category = 'Uncategorized';
+        }
         const index = appData.transactions.findIndex(t => t.id === id);
         if (index !== -1) {
             const oldT = appData.transactions[index];
@@ -891,6 +902,28 @@ if (!appData?.migratedToApril21) {
     if (appData) {
         appData.migratedToApril21 = true;
         
+        // Wait a tick for DataManager to be fully initialized before calling save
+        setTimeout(() => {
+            if (typeof DataManager !== 'undefined') {
+                DataManager.saveData();
+            }
+        }, 100);
+    }
+}
+
+// One-time migration to trim all transaction categories
+if (!appData?.migratedTrimCategories) {
+    if (appData && appData.transactions) {
+        appData.transactions.forEach(t => {
+            if (t.category) {
+                t.category = t.category.trim();
+                if (t.category === '') t.category = 'Uncategorized';
+            }
+        });
+    }
+    if (appData) {
+        appData.migratedTrimCategories = true;
+
         // Wait a tick for DataManager to be fully initialized before calling save
         setTimeout(() => {
             if (typeof DataManager !== 'undefined') {

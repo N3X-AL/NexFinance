@@ -86,7 +86,6 @@ Views.transactions = () => {
         };
 
         const renderChart = () => {
-            isDateFiltered = false;
             const ctx = document.getElementById('tx-cashflow-chart-canvas').getContext('2d');
 
             let labels, data, chartColor, chartBorderColor, statLabel, statColor;
@@ -112,6 +111,9 @@ Views.transactions = () => {
                     filteredTxs = regularTxs.filter(t => new Date(t.date) >= startDate);
                 }
                 const grouped = {};
+                if (currentCategory !== 'all') {
+                    filteredTxs = filteredTxs.filter(t => t.category === currentCategory);
+                }
                 filteredTxs
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .forEach(t => {
@@ -134,8 +136,8 @@ Views.transactions = () => {
             } else {
                 // Use DataManager for income/expense data
                 const chartData = currentViewMode === 'monthly'
-                    ? DataManager.getDailyChartDataForMonth(currentChartType, currentMonthlyYear, currentMonthlyMonth)
-                    : DataManager.getChartData(currentChartType, currentMonths);
+                    ? DataManager.getDailyChartDataForMonth(currentChartType, currentMonthlyYear, currentMonthlyMonth, currentCategory)
+                    : DataManager.getChartData(currentChartType, currentMonths, currentCategory);
                 labels = chartData.labels;
                 data = chartData.data;
                 const total = data.reduce((a, b) => a + b, 0);
@@ -299,6 +301,7 @@ Views.transactions = () => {
                 e.currentTarget.style.background = 'var(--primary)';
                 e.currentTarget.style.color = 'white';
                 currentChartType = e.currentTarget.getAttribute('data-type');
+                isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
         });
@@ -313,6 +316,7 @@ Views.transactions = () => {
                 e.currentTarget.style.color = 'white';
                 currentViewMode = e.currentTarget.getAttribute('data-mode');
                 updateTxViewModeUI();
+                isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
         });
@@ -320,6 +324,7 @@ Views.transactions = () => {
         document.getElementById('tx-chart-months-slider').addEventListener('input', (e) => {
             currentMonths = parseInt(e.target.value);
             document.getElementById('tx-chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
+            isDateFiltered = false; currentDateFilterLabel = null;
             renderChart();
         });
 
@@ -327,6 +332,7 @@ Views.transactions = () => {
         if (txMonthSelectEl) {
             txMonthSelectEl.addEventListener('change', (e) => {
                 currentMonthlyMonth = parseInt(e.target.value);
+                isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
         }
@@ -335,6 +341,7 @@ Views.transactions = () => {
         if (txYearSelectEl) {
             txYearSelectEl.addEventListener('change', (e) => {
                 currentMonthlyYear = parseInt(e.target.value);
+                isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
         }
@@ -345,6 +352,7 @@ Views.transactions = () => {
                 currentCategory = e.target.value;
                 // renderTransactionsTable will apply both currentCategory and currentDateFilterLabel
                 renderTransactionsTable();
+                renderChart();
             });
         }
 
