@@ -13,7 +13,8 @@ Views.transactions = () => {
         let isDateFiltered = false;
         let currentChartType = 'net'; // 'net' | 'income' | 'expense'
         let currentViewMode = 'daily'; // 'daily' | 'monthly'
-        const txNow = new Date();
+        const maxDate = regularTxs.length > 0 ? new Date(Math.max(...regularTxs.map(t => new Date(t.date)))) : new Date();
+        const txNow = maxDate;
         let currentMonthlyMonth = txNow.getMonth();
         let currentMonthlyYear = txNow.getFullYear();
 
@@ -25,6 +26,31 @@ Views.transactions = () => {
             if (!container) return;
 
             let txsToRender = regularTxs;
+
+            if (currentViewMode === 'monthly') {
+                const startDate = new Date(currentMonthlyYear, currentMonthlyMonth, 1);
+                startDate.setHours(0, 0, 0, 0);
+                const endDate = new Date(currentMonthlyYear, currentMonthlyMonth + 1, 0);
+                endDate.setHours(23, 59, 59, 999);
+                txsToRender = txsToRender.filter(t => {
+                    const d = new Date(t.date);
+                    return d >= startDate && d <= endDate;
+                });
+            } else {
+                const now = new Date(txNow);
+                now.setHours(23, 59, 59, 999);
+                const startDate = new Date(now);
+                const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
+                startDate.setMonth(startDate.getMonth() - currentMonths);
+                if (startDate.getMonth() !== expectedMonth) {
+                    startDate.setDate(0);
+                }
+                startDate.setHours(0, 0, 0, 0);
+                txsToRender = txsToRender.filter(t => {
+                    const d = new Date(t.date);
+                    return d >= startDate && d <= now;
+                });
+            }
 
             // Apply date filter if active
             if (isDateFiltered && currentDateFilterLabel) {
@@ -103,10 +129,14 @@ Views.transactions = () => {
                         return d >= startDate && d <= endDate;
                     });
                 } else {
-                    const now = new Date();
+                    const now = new Date(txNow);
                     now.setHours(23, 59, 59, 999);
                     const startDate = new Date(now);
+                    const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
                     startDate.setMonth(startDate.getMonth() - currentMonths);
+                    if (startDate.getMonth() !== expectedMonth) {
+                        startDate.setDate(0);
+                    }
                     startDate.setHours(0, 0, 0, 0);
                     filteredTxs = regularTxs.filter(t => new Date(t.date) >= startDate);
                 }
