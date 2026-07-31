@@ -154,23 +154,33 @@ Views.dashboard = () => {
                                 data: netData,
                                 borderColor: function(context) {
                                     const chart = context.chart;
-                                    const {ctx, chartArea} = chart;
+                                    const {ctx, chartArea, scales} = chart;
                                     if (!chartArea) return null;
+                                    const yZero = scales.y.getPixelForValue(0);
+                                    const height = chartArea.bottom - chartArea.top;
+                                    let ratio = (chartArea.bottom - yZero) / height;
+                                    ratio = Math.max(0, Math.min(1, ratio));
+
                                     const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
                                     gradient.addColorStop(0, '#ef4444');
-                                    gradient.addColorStop(0.5, '#ef4444');
-                                    gradient.addColorStop(0.5, '#10b981');
+                                    gradient.addColorStop(ratio, '#ef4444');
+                                    gradient.addColorStop(ratio, '#10b981');
                                     gradient.addColorStop(1, '#10b981');
                                     return gradient;
                                 },
                                 backgroundColor: function(context) {
                                     const chart = context.chart;
-                                    const {ctx, chartArea} = chart;
+                                    const {ctx, chartArea, scales} = chart;
                                     if (!chartArea) return null;
+                                    const yZero = scales.y.getPixelForValue(0);
+                                    const height = chartArea.bottom - chartArea.top;
+                                    let ratio = (chartArea.bottom - yZero) / height;
+                                    ratio = Math.max(0, Math.min(1, ratio));
+
                                     const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
                                     gradient.addColorStop(0, 'rgba(239, 68, 68, 0.1)');
-                                    gradient.addColorStop(0.5, 'rgba(239, 68, 68, 0.1)');
-                                    gradient.addColorStop(0.5, 'rgba(16, 185, 129, 0.1)');
+                                    gradient.addColorStop(ratio, 'rgba(239, 68, 68, 0.1)');
+                                    gradient.addColorStop(ratio, 'rgba(16, 185, 129, 0.1)');
                                     gradient.addColorStop(1, 'rgba(16, 185, 129, 0.1)');
                                     return gradient;
                                 },
