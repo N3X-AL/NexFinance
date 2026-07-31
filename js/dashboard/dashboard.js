@@ -154,23 +154,35 @@ Views.dashboard = () => {
                                 data: netData,
                                 borderColor: function(context) {
                                     const chart = context.chart;
-                                    const {ctx, chartArea} = chart;
+                                    const {ctx, chartArea, scales} = chart;
                                     if (!chartArea) return null;
+
+                                    const yZero = scales.y.getPixelForValue(0);
+                                    let rawZeroStop = (chartArea.bottom - yZero) / (chartArea.bottom - chartArea.top);
+
+                                    const startTransition = Math.max(0, Math.min(1, rawZeroStop - 0.05));
+                                    const endTransition = Math.max(0, Math.min(1, rawZeroStop + 0.05));
+
                                     const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
                                     gradient.addColorStop(0, '#ef4444');
-                                    gradient.addColorStop(0.5, '#ef4444');
-                                    gradient.addColorStop(0.5, '#10b981');
+                                    if (startTransition > 0) gradient.addColorStop(startTransition, '#ef4444');
+                                    if (endTransition < 1) gradient.addColorStop(endTransition, '#10b981');
                                     gradient.addColorStop(1, '#10b981');
                                     return gradient;
                                 },
                                 backgroundColor: function(context) {
                                     const chart = context.chart;
-                                    const {ctx, chartArea} = chart;
+                                    const {ctx, chartArea, scales} = chart;
                                     if (!chartArea) return null;
+
+                                    const yZero = scales.y.getPixelForValue(0);
+                                    let zeroStop = (chartArea.bottom - yZero) / (chartArea.bottom - chartArea.top);
+                                    zeroStop = Math.max(0, Math.min(1, zeroStop));
+
                                     const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
                                     gradient.addColorStop(0, 'rgba(239, 68, 68, 0.1)');
-                                    gradient.addColorStop(0.5, 'rgba(239, 68, 68, 0.1)');
-                                    gradient.addColorStop(0.5, 'rgba(16, 185, 129, 0.1)');
+                                    gradient.addColorStop(zeroStop, 'rgba(239, 68, 68, 0.1)');
+                                    gradient.addColorStop(zeroStop, 'rgba(16, 185, 129, 0.1)');
                                     gradient.addColorStop(1, 'rgba(16, 185, 129, 0.1)');
                                     return gradient;
                                 },
