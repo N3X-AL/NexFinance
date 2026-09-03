@@ -676,7 +676,58 @@ class App {
         });
     }
 
+
+    showEditLoanRepaymentModal(transactionId, loanId) {
+        const tx = appData.transactions.find(t => t.id === transactionId);
+        const loan = appData.loans.find(l => l.id === loanId);
+        if (!tx || !loan) return;
+
+        const absAmount = Math.abs(tx.amount);
+        const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === tx.accountId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+
+        const content = `
+            <form id="edit-loan-repayment-form">
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" id="elr-date" class="form-control" required value="${tx.date}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description (Optional)</label>
+                    <input type="text" id="elr-description" class="form-control" value="${tx.merchant.replace(/^Loan Repayment (To|From): [^(]+(?:\(([^)]+)\))?/, '$2').trim()}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Amount</label>
+                    <input type="text" inputmode="decimal" id="elr-amount" class="form-control math-input" value="${absAmount}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Account</label>
+                    <select id="elr-account" class="form-control">
+                        ${accountOptions}
+                    </select>
+                </div>
+            </form>
+        `;
+
+        this.showModal('Edit Loan Repayment', content, () => {
+            const form = document.getElementById('edit-loan-repayment-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            const date = document.getElementById('elr-date').value;
+            const description = document.getElementById('elr-description').value;
+            const amount = parseFloat(document.getElementById('elr-amount').value);
+            const accountId = parseInt(document.getElementById('elr-account').value);
+
+            DataManager.editLoanRepayment(transactionId, loanId, { date, description, amount, accountId });
+            this.navigate(this.currentRoute);
+            return true;
+        });
+    }
+
     showRecordRepaymentModal(loanId) {
+
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
 

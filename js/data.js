@@ -694,7 +694,62 @@ const DataManager = {
         return true;
     },
 
+
+    editLoanRepayment: (transactionId, loanId, updatedData) => {
+        const txIndex = appData.transactions.findIndex(t => t.id === transactionId);
+        const loan = appData.loans.find(l => l.id === loanId);
+        if (txIndex === -1 || !loan) return false;
+
+        const oldTx = appData.transactions[txIndex];
+        const oldAbsAmount = Math.abs(oldTx.amount);
+        const newAbsAmount = updatedData.amount;
+        const amountDiff = newAbsAmount - oldAbsAmount;
+
+        // Revert old transaction effect on account
+        const oldAccount = appData.accounts.find(a => a.id === parseInt(oldTx.accountId));
+        if (oldAccount) {
+            oldAccount.balance -= parseFloat(oldTx.amount);
+        }
+
+        // Adjust loan settledAmount
+        // Overpayments aren't handled during edit currently (complex edge cases), so just bound to max
+        loan.settledAmount += amountDiff;
+        if (loan.settledAmount < 0) loan.settledAmount = 0;
+
+        if (loan.settledAmount >= loan.amount) {
+            loan.status = 'settled';
+        } else {
+            loan.status = 'active';
+        }
+
+        // Form new merchant string
+        let merchant = loan.type === 'given' ? 'Loan Repayment From: ' + loan.person : 'Loan Repayment To: ' + loan.person;
+        if (updatedData.description) merchant += ` (${updatedData.description})`;
+
+        // New transaction amount sign
+        const txAmount = loan.type === 'given' ? Math.abs(newAbsAmount) : -Math.abs(newAbsAmount);
+
+        // Apply new transaction effect on account
+        const newAccount = appData.accounts.find(a => a.id === parseInt(updatedData.accountId));
+        if (newAccount) {
+            newAccount.balance += parseFloat(txAmount);
+        }
+
+        // Update transaction object
+        appData.transactions[txIndex] = {
+            ...oldTx,
+            date: updatedData.date,
+            amount: txAmount,
+            accountId: updatedData.accountId,
+            merchant: merchant
+        };
+
+        DataManager.saveData();
+        return true;
+    },
+
     updateLoan: (loanId, newData, accountId) => {
+
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
 

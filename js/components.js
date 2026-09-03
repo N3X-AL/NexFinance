@@ -209,6 +209,31 @@ const Components = {
             const colorC = loan.type === 'given' ? 'var(--warning)' : 'var(--accent)';
             const loanTx = DataManager.findLoanDisbursementTransaction(loan.id);
             const loanAccount = loanTx ? DataManager.getAccountById(loanTx.accountId) : null;
+
+            // Get repayment history
+            const allTxs = DataManager.getLoanTransactions().filter(t => t.loanId === loan.id);
+            const repayments = allTxs.filter(t => t.merchant.startsWith('Loan Repayment') || (t.merchant.startsWith('Offset') && t.category === 'Loan'));
+
+            const historyHtml = repayments.length > 0 ? `
+                <div id="loan-history-${loan.id}" style="display: none; margin-top: 12px; border-top: 1px solid var(--border-light); padding-top: 12px;">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Repayment History</div>
+                    ${repayments.map(tx => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border-light);">
+                            <div>
+                                <div style="font-size: 12px; font-weight: 500;">${DataManager.formatDate(tx.date)}</div>
+                                ${tx.merchant ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">${tx.merchant.replace(/^Loan Repayment (To|From): [^(]+(?:\(([^)]+)\))?/, '$2').trim() || tx.merchant}</div>` : ''}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 13px; font-weight: 600;">${DataManager.formatCurrency(Math.abs(tx.amount))}</span>
+                                <button class="icon-btn tooltip" style="width: 24px; height: 24px; border: none; background: transparent; color: var(--text-secondary);" data-tooltip="Edit" onclick="app.showEditLoanRepaymentModal(${tx.id}, ${loan.id})">
+                                    <span class="material-icons-round" style="font-size: 14px;">edit</span>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : '';
+
             return `
                 <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
@@ -234,17 +259,24 @@ const Components = {
                         <button class="btn btn-secondary" style="padding: 6px; display: flex; align-items: center; justify-content: center;" onclick="app.showEditLoanModal(${loan.id})" title="Edit Loan">
                             <span class="material-icons-round" style="font-size: 14px;">edit</span>
                         </button>
+                        ${repayments.length > 0 ? `<button class="btn btn-secondary" style="padding: 6px; display: flex; align-items: center; justify-content: center;" onclick="document.getElementById('loan-history-${loan.id}').style.display = document.getElementById('loan-history-${loan.id}').style.display === 'none' ? 'block' : 'none'" title="View History">
+                            <span class="material-icons-round" style="font-size: 14px;">history</span>
+                        </button>` : ''}
                         <button class="btn btn-danger" style="padding: 6px; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.deleteLoan(${loan.id})" title="Delete Loan & History">
                             <span class="material-icons-round" style="font-size: 14px;">delete</span>
                         </button>
                     </div>` : `
                     <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
                         <span class="tag bg-success-light" style="font-size: 11px; padding: 2px 6px;">Settled</span>
+                        ${repayments.length > 0 ? `<button class="btn btn-secondary" style="padding: 4px 6px; display: flex; align-items: center; justify-content: center;" onclick="document.getElementById('loan-history-${loan.id}').style.display = document.getElementById('loan-history-${loan.id}').style.display === 'none' ? 'block' : 'none'" title="View History">
+                            <span class="material-icons-round" style="font-size: 14px;">history</span>
+                        </button>` : ''}
                         <button class="btn btn-danger" style="padding: 4px 6px; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.deleteLoan(${loan.id})" title="Delete Entry">
                             <span class="material-icons-round" style="font-size: 14px;">delete</span>
                         </button>
                     </div>
                     `}
+                    ${historyHtml}
                 </div>
             `;
         };
