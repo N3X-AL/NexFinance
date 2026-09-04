@@ -105,6 +105,10 @@ class App {
         this.container.parentElement.scrollTop = 0;
     }
 
+    renderViews() {
+        this.navigate(this.currentRoute || 'settings');
+    }
+
     updateHeader(route) {
         const titles = {
             dashboard: { title: 'Dashboard', sub: 'Welcome back, here\'s your financial overview.' },
@@ -206,8 +210,13 @@ class App {
             }
 
             DataManager.deleteCategory(name, fallback);
-            if (onSuccess) {
-                onSuccess();
+            if (typeof onSuccess === 'function') {
+                try {
+                    onSuccess();
+                } catch (e) {
+                    console.error('Error executing onSuccess callback:', e);
+                    this.navigate('settings');
+                }
             } else {
                 this.navigate('settings');
             }
@@ -222,7 +231,7 @@ class App {
         }, 10);
     }
 
-    showEditCategoryModal(oldName) {
+    showEditCategoryModal(oldName, onSuccess) {
         const content = `
             <form id="edit-category-form">
                 <div class="form-group">
@@ -241,7 +250,16 @@ class App {
 
             const newName = document.getElementById('ec-name').value.trim();
             if (DataManager.editCategory(oldName, newName)) {
-                this.navigate('settings');
+                if (typeof onSuccess === 'function') {
+                    try {
+                        onSuccess();
+                    } catch (e) {
+                        console.error('Error executing onSuccess callback:', e);
+                        this.navigate('settings');
+                    }
+                } else {
+                    this.navigate('settings');
+                }
                 return true;
             } else {
                 alert('A category with this name already exists.');
