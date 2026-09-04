@@ -307,8 +307,8 @@
     overflow-y: auto;
 }
 
-.modal:has(.combo-box) .modal-body,
-.modal-body.has-combobox {
+.modal:has(.combo-box-dropdown.active) .modal-body,
+.modal-body.combobox-open {
     overflow: visible;
 }
 

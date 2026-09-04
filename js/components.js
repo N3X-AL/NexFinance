@@ -416,11 +416,8 @@ class ComboBox {
             }
         });
 
-        // Mark modal-body if inside a modal to prevent overflow clipping
-        const modalBody = this.input.closest('.modal-body');
-        if (modalBody) {
-            modalBody.classList.add('has-combobox');
-        }
+        // Track modal-body if inside a modal
+        this.modalBody = this.input.closest('.modal-body');
 
         this.renderOptions(this.options);
     }
@@ -428,18 +425,24 @@ class ComboBox {
     open() {
         this.filterOptions();
         this.dropdown.classList.add('active');
+        if (this.modalBody) {
+            this.modalBody.classList.add('combobox-open');
+        }
         this.positionDropdown();
     }
 
     close() {
         this.dropdown.classList.remove('active');
         this.dropdown.classList.remove('open-up');
+        if (this.modalBody) {
+            this.modalBody.classList.remove('combobox-open');
+        }
     }
 
     positionDropdown() {
         if (!this.dropdown) return;
         const rect = this.input.getBoundingClientRect();
-        const dropdownHeight = 220;
+        const dropdownHeight = this.dropdown.offsetHeight || parseFloat(window.getComputedStyle(this.dropdown).maxHeight) || 200;
         const spaceBelow = window.innerHeight - rect.bottom;
         const spaceAbove = rect.top;
 
