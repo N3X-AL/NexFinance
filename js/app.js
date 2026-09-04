@@ -171,9 +171,8 @@ class App {
         }
     }
 
-    showDeleteCategoryModal(name) {
+    showDeleteCategoryModal(name, onSuccess) {
         const categories = DataManager.getCategories().filter(c => c !== name);
-        const optionsHtml = categories.map(c => `<option value="${c}">${c}</option>`).join('');
 
         const content = `
             <form id="delete-category-form">
@@ -181,14 +180,8 @@ class App {
                     Deleting <strong>${name}</strong> will require moving its existing transactions to another category.
                 </p>
                 <div class="form-group">
-                    <label class="form-label">Move transactions to:</label>
-                    <div style="position: relative;">
-                        <input type="text" id="dc-fallback" class="form-control" value="Here and There" required>
-                        <select id="dc-fallback-select" class="form-control" style="margin-top: 8px;" onchange="document.getElementById('dc-fallback').value = this.value">
-                            <option value="" disabled selected>Or choose existing...</option>
-                            ${optionsHtml}
-                        </select>
-                    </div>
+                    <label class="form-label">Move transactions to</label>
+                    <input type="text" id="dc-fallback" class="form-control" placeholder="Search or select a category" required autocomplete="off">
                 </div>
             </form>
         `;
@@ -200,7 +193,12 @@ class App {
                 return false;
             }
 
-            const fallback = document.getElementById('dc-fallback').value.trim() || 'Here and There';
+            const fallback = document.getElementById('dc-fallback').value.trim();
+
+            if (!fallback) {
+                alert('Please select or specify a category to move transactions to.');
+                return false;
+            }
 
             if (fallback.toLowerCase() === name.toLowerCase()) {
                 alert('Cannot move transactions to the category being deleted.');
@@ -208,9 +206,20 @@ class App {
             }
 
             DataManager.deleteCategory(name, fallback);
-            this.navigate('settings');
+            if (onSuccess) {
+                onSuccess();
+            } else {
+                this.navigate('settings');
+            }
             return true;
         });
+
+        // Initialize Combo Box for fallback category
+        setTimeout(() => {
+            if (window.ComboBox) {
+                new window.ComboBox('dc-fallback', categories);
+            }
+        }, 10);
     }
 
     showEditCategoryModal(oldName) {
