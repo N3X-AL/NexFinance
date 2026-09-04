@@ -416,22 +416,47 @@ class ComboBox {
             }
         });
 
+        // Mark modal-body if inside a modal to prevent overflow clipping
+        const modalBody = this.input.closest('.modal-body');
+        if (modalBody) {
+            modalBody.classList.add('has-combobox');
+        }
+
         this.renderOptions(this.options);
     }
 
     open() {
         this.filterOptions();
         this.dropdown.classList.add('active');
+        this.positionDropdown();
     }
 
     close() {
         this.dropdown.classList.remove('active');
+        this.dropdown.classList.remove('open-up');
+    }
+
+    positionDropdown() {
+        if (!this.dropdown) return;
+        const rect = this.input.getBoundingClientRect();
+        const dropdownHeight = 220;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+            this.dropdown.classList.add('open-up');
+        } else {
+            this.dropdown.classList.remove('open-up');
+        }
     }
 
     filterOptions() {
         const val = this.input.value.toLowerCase();
         const filtered = this.options.filter(opt => opt.toLowerCase().includes(val));
         this.renderOptions(filtered);
+        if (this.dropdown.classList.contains('active')) {
+            this.positionDropdown();
+        }
     }
 
     renderOptions(opts) {

@@ -307,6 +307,11 @@
     overflow-y: auto;
 }
 
+.modal:has(.combo-box) .modal-body,
+.modal-body.has-combobox {
+    overflow: visible;
+}
+
 .modal-footer {
     padding: 20px 24px;
     border-top: 1px solid var(--border);
@@ -379,9 +384,16 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
-    z-index: 100;
+    z-index: 1050;
     display: none;
     margin-top: 4px;
+}
+
+.combo-box-dropdown.open-up {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 4px;
 }
 
 .combo-box-dropdown.active {
