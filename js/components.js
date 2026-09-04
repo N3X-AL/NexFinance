@@ -416,22 +416,53 @@ class ComboBox {
             }
         });
 
+        // Track modal-body if inside a modal
+        this.modalBody = this.input.closest('.modal-body');
+
         this.renderOptions(this.options);
     }
 
     open() {
         this.filterOptions();
         this.dropdown.classList.add('active');
+        if (this.modalBody) {
+            this.modalBody.classList.add('combobox-open');
+        }
+        this.positionDropdown();
     }
 
     close() {
+        const wasActive = this.dropdown.classList.contains('active');
         this.dropdown.classList.remove('active');
+        this.dropdown.classList.remove('open-up');
+        if (wasActive && this.modalBody) {
+            if (!this.modalBody.querySelector('.combo-box-dropdown.active')) {
+                this.modalBody.classList.remove('combobox-open');
+            }
+        }
+    }
+
+    positionDropdown() {
+        if (!this.dropdown) return;
+        const rect = this.input.getBoundingClientRect();
+        const dropdownHeight = this.dropdown.offsetHeight || parseFloat(window.getComputedStyle(this.dropdown).maxHeight) || 200;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+            this.dropdown.classList.add('open-up');
+        } else {
+            this.dropdown.classList.remove('open-up');
+        }
     }
 
     filterOptions() {
         const val = this.input.value.toLowerCase();
         const filtered = this.options.filter(opt => opt.toLowerCase().includes(val));
         this.renderOptions(filtered);
+        if (this.dropdown.classList.contains('active')) {
+            this.positionDropdown();
+        }
     }
 
     renderOptions(opts) {
