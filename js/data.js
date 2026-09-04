@@ -490,6 +490,16 @@ const DataManager = {
     },
 
     getCategories: () => {
+        if (!appData.categories || !Array.isArray(appData.categories)) {
+            const defaultCategories = ['Business', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'];
+            const extracted = (appData.transactions || [])
+                .filter(t => t.category && t.category !== 'Loan' && t.category !== 'Investment' && t.category !== 'Transfer')
+                .map(t => t.category);
+            appData.categories = [...new Set([...defaultCategories, ...extracted])].sort();
+
+            // We optionally save the data here if we just reconstructed it so it's persisted, but getCategories is a getter.
+            // If DataManager exists, we can call saveData, but doing it in a getter might cause issues. We'll skip saveData here since any modification (addCategory) will save it anyway.
+        }
         return [...appData.categories].sort();
     },
 
