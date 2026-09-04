@@ -432,10 +432,13 @@ class ComboBox {
     }
 
     close() {
+        const wasActive = this.dropdown.classList.contains('active');
         this.dropdown.classList.remove('active');
         this.dropdown.classList.remove('open-up');
-        if (this.modalBody) {
-            this.modalBody.classList.remove('combobox-open');
+        if (wasActive && this.modalBody) {
+            if (!this.modalBody.querySelector('.combo-box-dropdown.active')) {
+                this.modalBody.classList.remove('combobox-open');
+            }
         }
     }
 
