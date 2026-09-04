@@ -6,12 +6,22 @@ const defaultData = {
     transactions: [],
     budgets: [],
     loans: [],
+    categories: [
+        'Business', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'
+    ],
     currency: 'USD'
 };
 
 const savedData = localStorage.getItem('nexfinance_data');
 const appData = savedData ? JSON.parse(savedData) : defaultData;
 if (!appData.currency) appData.currency = 'USD';
+if (!appData.categories) {
+    const defaultCategories = ['Business', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'];
+    const extracted = appData.transactions
+        .filter(t => t.category && t.category !== 'Loan' && t.category !== 'Investment' && t.category !== 'Transfer')
+        .map(t => t.category);
+    appData.categories = [...new Set([...defaultCategories, ...extracted])].sort();
+}
 
 const CloudSync = {
     getToken: () => localStorage.getItem('nexfinance_gh_token') || '',
@@ -479,18 +489,74 @@ const DataManager = {
         return appData.accounts.find(a => a.id === id);
     },
 
-    getCategories: (type) => {
-        const defaults = type === 'expense' 
-            ? ['Food', 'Transport', 'Utilities', 'Shopping', 'Healthcare', 'Entertainment', 'Housing'] 
-            : ['Salary', 'Gift', 'Business', 'Refund', 'Interest'];
+    getCategories: () => {
+        return [...appData.categories].sort();
+    },
+
+    addCategory: (name) => {
+        const lowerName = name.trim().toLowerCase();
+        if (appData.categories.some(c => c.toLowerCase() === lowerName)) {
+            return false;
+        }
+        appData.categories.push(name.trim());
+        appData.categories.sort();
+        DataManager.saveData();
+        return true;
+    },
+
+    deleteCategory: (name, fallbackName) => {
+        const idx = appData.categories.findIndex(c => c === name);
+        if (idx !== -1) {
+            appData.categories.splice(idx, 1);
+        }
+
+        const lowerFallback = fallbackName.trim().toLowerCase();
+        if (!appData.categories.some(c => c.toLowerCase() === lowerFallback)) {
+            appData.categories.push(fallbackName.trim());
+            appData.categories.sort();
+        }
+
+        appData.transactions.forEach(t => {
+            if (t.category === name) {
+                t.category = fallbackName.trim();
+            }
+        });
+
+        DataManager.saveData();
+        return true;
+    },
+
+    editCategory: (oldName, newName) => {
+        const lowerNewName = newName.trim().toLowerCase();
+        const lowerOldName = oldName.toLowerCase();
         
-        const extracted = appData.transactions
-            .filter(t => t.category !== 'Loan' && t.category !== 'Investment' && t.category !== 'Transfer')
-            .filter(t => type === 'expense' ? t.amount < 0 : t.amount > 0)
-            .map(t => t.category);
-            
-        // Return unique, sorted combined list
-        return [...new Set([...defaults, ...extracted])].sort();
+        // If the name didn't practically change, do nothing
+        if (lowerOldName === lowerNewName && oldName.trim() === newName.trim()) return true;
+
+        // Check for collision
+        if (lowerOldName !== lowerNewName && appData.categories.some(c => c.toLowerCase() === lowerNewName)) {
+            return false; // New name already exists
+        }
+
+        const idx = appData.categories.findIndex(c => c === oldName);
+        if (idx !== -1) {
+            appData.categories[idx] = newName.trim();
+            appData.categories.sort();
+        } else {
+            // Should not happen, but just in case
+            appData.categories.push(newName.trim());
+            appData.categories.sort();
+        }
+
+        // Update all transactions using the old category
+        appData.transactions.forEach(t => {
+            if (t.category === oldName) {
+                t.category = newName.trim();
+            }
+        });
+
+        DataManager.saveData();
+        return true;
     },
 
     formatCurrency: (amount) => {
