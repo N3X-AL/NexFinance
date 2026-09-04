@@ -18,7 +18,7 @@ if (!appData.currency) appData.currency = 'USD';
 if (!appData.categories) {
     const defaultCategories = ['Business', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'];
     const extracted = appData.transactions
-        .filter(t => t.category && t.category !== 'Loan' && t.category !== 'Investment' && t.category !== 'Transfer')
+        .filter(t => t.category && !['loan', 'loan settlement', 'transfer', 'investment'].includes(t.category.toLowerCase()))
         .map(t => t.category);
     appData.categories = [...new Set([...defaultCategories, ...extracted])].sort();
 }
@@ -489,11 +489,23 @@ const DataManager = {
         return appData.accounts.find(a => a.id === id);
     },
 
+    getCanonicalSystemCategory: (category) => {
+        if (!category) return null;
+        const lower = category.trim().toLowerCase();
+        const systemCategories = {
+            'loan': 'Loan',
+            'loan settlement': 'Loan Settlement',
+            'transfer': 'Transfer',
+            'investment': 'Investment'
+        };
+        return systemCategories[lower] || null;
+    },
+
     getCategories: () => {
         if (!appData.categories || !Array.isArray(appData.categories)) {
             const defaultCategories = ['Business', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'];
             const extracted = (appData.transactions || [])
-                .filter(t => t.category && t.category !== 'Loan' && t.category !== 'Investment' && t.category !== 'Transfer')
+                .filter(t => t.category && !DataManager.getCanonicalSystemCategory(t.category))
                 .map(t => t.category);
             appData.categories = [...new Set([...defaultCategories, ...extracted])].sort();
 
@@ -504,6 +516,7 @@ const DataManager = {
     },
 
     addCategory: (name) => {
+        DataManager.getCategories();
         const lowerName = name.trim().toLowerCase();
         if (appData.categories.some(c => c.toLowerCase() === lowerName)) {
             return false;
@@ -515,6 +528,7 @@ const DataManager = {
     },
 
     deleteCategory: (name, fallbackName) => {
+        DataManager.getCategories();
         const idx = appData.categories.findIndex(c => c === name);
         if (idx !== -1) {
             appData.categories.splice(idx, 1);
@@ -537,6 +551,7 @@ const DataManager = {
     },
 
     editCategory: (oldName, newName) => {
+        DataManager.getCategories();
         const lowerNewName = newName.trim().toLowerCase();
         const lowerOldName = oldName.toLowerCase();
         
@@ -594,7 +609,16 @@ const DataManager = {
     addTransaction: (transaction) => {
         if (transaction.category) {
             transaction.category = transaction.category.trim();
-            if (transaction.category === '') transaction.category = 'Uncategorized';
+            if (transaction.category === '') {
+                transaction.category = 'Uncategorized';
+            } else {
+                const canonicalSystem = DataManager.getCanonicalSystemCategory(transaction.category);
+                if (canonicalSystem) {
+                    transaction.category = canonicalSystem;
+                } else {
+                    DataManager.addCategory(transaction.category);
+                }
+            }
         }
         const newId = appData.transactions.length > 0 ? Math.max(...appData.transactions.map(t => t.id)) + 1 : 1;
         appData.transactions.push({ id: newId, createdAt: new Date().toISOString(), ...transaction });
@@ -641,7 +665,16 @@ const DataManager = {
     editTransaction: (id, updatedTransaction) => {
         if (updatedTransaction.category) {
             updatedTransaction.category = updatedTransaction.category.trim();
-            if (updatedTransaction.category === '') updatedTransaction.category = 'Uncategorized';
+            if (updatedTransaction.category === '') {
+                updatedTransaction.category = 'Uncategorized';
+            } else {
+                const canonicalSystem = DataManager.getCanonicalSystemCategory(updatedTransaction.category);
+                if (canonicalSystem) {
+                    updatedTransaction.category = canonicalSystem;
+                } else {
+                    DataManager.addCategory(updatedTransaction.category);
+                }
+            }
         }
         const index = appData.transactions.findIndex(t => t.id === id);
         if (index !== -1) {

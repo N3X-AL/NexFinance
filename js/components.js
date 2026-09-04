@@ -352,7 +352,7 @@ class ComboBox {
     constructor(inputElementId, options) {
         this.input = document.getElementById(inputElementId);
         if (!this.input) return;
-        this.options = options;
+        this.options = options || [];
 
         // Setup DOM structure
         const wrapper = document.createElement('div');
@@ -366,6 +366,8 @@ class ComboBox {
         const icon = document.createElement('span');
         icon.className = 'material-icons-round combo-box-icon';
         icon.textContent = 'expand_more';
+        icon.style.pointerEvents = 'auto';
+        icon.style.cursor = 'pointer';
         wrapper.appendChild(icon);
 
         this.dropdown = document.createElement('div');
@@ -373,8 +375,39 @@ class ComboBox {
         wrapper.appendChild(this.dropdown);
 
         // Event Listeners
-        this.input.addEventListener('focus', () => this.open());
-        this.input.addEventListener('input', () => this.filterOptions());
+        this.input.addEventListener('focus', () => {
+            if (!this.justClosed) {
+                this.open();
+            }
+        });
+
+        this.input.addEventListener('click', () => {
+            if (!this.justClosed && !this.dropdown.classList.contains('active')) {
+                this.open();
+            }
+        });
+
+        this.input.addEventListener('input', () => {
+            if (this.dropdown.classList.contains('active')) {
+                this.filterOptions();
+            }
+        });
+
+        this.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.close();
+            }
+        });
+
+        icon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (this.dropdown.classList.contains('active')) {
+                this.close();
+            } else {
+                this.input.focus();
+                this.open();
+            }
+        });
 
         // Click outside to close
         document.addEventListener('click', (e) => {
@@ -404,21 +437,34 @@ class ComboBox {
     renderOptions(opts) {
         this.dropdown.innerHTML = '';
 
+        const currentVal = this.input.value.trim();
+        const hasMatch = this.options.some(opt => opt.toLowerCase() === currentVal.toLowerCase());
+
         // Add new item logic at top
         const addBtn = document.createElement('div');
         addBtn.className = 'combo-box-option add-new';
-        addBtn.innerHTML = '<span class="material-icons-round" style="font-size: 16px;">add</span> Add Category';
+        
+        const addIcon = document.createElement('span');
+        addIcon.className = 'material-icons-round';
+        addIcon.style.fontSize = '16px';
+        addIcon.textContent = 'add';
+        addBtn.appendChild(addIcon);
+
+        const addText = document.createTextNode(
+            currentVal && !hasMatch ? ` Use "${currentVal}" as new category` : ' Add New Category'
+        );
+        addBtn.appendChild(addText);
+
         // Need to stop propagation so click outside doesn't fire before we trigger
         addBtn.addEventListener('mousedown', (e) => {
             e.preventDefault();
+            this.justClosed = true;
             this.close();
-            if (typeof window.app !== 'undefined' && window.app.showAddCategoryModal) {
-                window.app.showAddCategoryModal((newCat) => {
-                    if (newCat) {
-                        this.options = DataManager.getCategories();
-                        this.input.value = newCat;
-                    }
-                });
+            this.input.focus();
+            setTimeout(() => { this.justClosed = false; }, 200);
+
+            if (!currentVal || hasMatch) {
+                this.input.select();
             }
         });
         this.dropdown.appendChild(addBtn);
