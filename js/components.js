@@ -443,11 +443,17 @@ class ComboBox {
         // Add new item logic at top
         const addBtn = document.createElement('div');
         addBtn.className = 'combo-box-option add-new';
-        if (currentVal && !hasMatch) {
-            addBtn.innerHTML = `<span class="material-icons-round" style="font-size: 16px;">add</span> Use "${currentVal}" as new category`;
-        } else {
-            addBtn.innerHTML = '<span class="material-icons-round" style="font-size: 16px;">add</span> Add New Category';
-        }
+        
+        const addIcon = document.createElement('span');
+        addIcon.className = 'material-icons-round';
+        addIcon.style.fontSize = '16px';
+        addIcon.textContent = 'add';
+        addBtn.appendChild(addIcon);
+
+        const addText = document.createTextNode(
+            currentVal && !hasMatch ? ` Use "${currentVal}" as new category` : ' Add New Category'
+        );
+        addBtn.appendChild(addText);
 
         // Need to stop propagation so click outside doesn't fire before we trigger
         addBtn.addEventListener('mousedown', (e) => {
