@@ -82,6 +82,36 @@ Views.settings = () => {
         <hr style="border: none; border-top: 1px solid var(--border); margin: 24px 0;">
 
         <div>
+            <h4 style="margin-bottom: 12px;">Categories Management</h4>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Manage your custom categories.</p>
+            <div style="background: var(--bg-base); border-radius: var(--radius-md); padding: 12px; border: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span style="font-weight: 500;">Your Categories</span>
+                    <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="app.showAddCategoryModal(() => app.renderViews())">
+                        <span class="material-icons-round" style="font-size: 16px;">add</span> Add
+                    </button>
+                </div>
+                <div style="max-height: 200px; overflow-y: auto;">
+                    ${DataManager.getCategories().map(cat => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
+                            <span>${cat}</span>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-secondary" style="padding: 4px 8px;" onclick="app.showEditCategoryModal('${cat.replace(/'/g, "\\'")}', () => app.renderViews())">
+                                    <span class="material-icons-round" style="font-size: 14px;">edit</span>
+                                </button>
+                                <button class="btn btn-danger" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.showDeleteCategoryModal('${cat.replace(/'/g, "\\'")}', () => app.renderViews())">
+                                    <span class="material-icons-round" style="font-size: 14px;">delete</span>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 24px 0;">
+
+        <div>
             <h4 style="margin-bottom: 12px;">App Preferences</h4>
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
                 <div>

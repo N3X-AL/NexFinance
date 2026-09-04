@@ -171,6 +171,104 @@ class App {
         }
     }
 
+    showDeleteCategoryModal(name) {
+        const categories = DataManager.getCategories().filter(c => c !== name);
+        const optionsHtml = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+
+        const content = `
+            <form id="delete-category-form">
+                <p style="margin-bottom: 16px; font-size: 14px; color: var(--text-secondary);">
+                    Deleting <strong>${name}</strong> will require moving its existing transactions to another category.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Move transactions to:</label>
+                    <div style="position: relative;">
+                        <input type="text" id="dc-fallback" class="form-control" value="Here and There" required>
+                        <select id="dc-fallback-select" class="form-control" style="margin-top: 8px;" onchange="document.getElementById('dc-fallback').value = this.value">
+                            <option value="" disabled selected>Or choose existing...</option>
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                </div>
+            </form>
+        `;
+
+        this.showModal('Delete Category', content, () => {
+            const form = document.getElementById('delete-category-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            const fallback = document.getElementById('dc-fallback').value.trim() || 'Here and There';
+
+            if (fallback.toLowerCase() === name.toLowerCase()) {
+                alert('Cannot move transactions to the category being deleted.');
+                return false;
+            }
+
+            DataManager.deleteCategory(name, fallback);
+            this.navigate('settings');
+            return true;
+        });
+    }
+
+    showEditCategoryModal(oldName) {
+        const content = `
+            <form id="edit-category-form">
+                <div class="form-group">
+                    <label class="form-label">Category Name</label>
+                    <input type="text" id="ec-name" class="form-control" value="${oldName}" required>
+                </div>
+            </form>
+        `;
+
+        this.showModal('Edit Category', content, () => {
+            const form = document.getElementById('edit-category-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            const newName = document.getElementById('ec-name').value.trim();
+            if (DataManager.editCategory(oldName, newName)) {
+                this.navigate('settings');
+                return true;
+            } else {
+                alert('A category with this name already exists.');
+                return false;
+            }
+        });
+    }
+
+    showAddCategoryModal(onSuccess) {
+        const content = `
+            <form id="add-category-form">
+                <div class="form-group">
+                    <label class="form-label">Category Name</label>
+                    <input type="text" id="c-name" class="form-control" placeholder="e.g. Groceries" required>
+                </div>
+            </form>
+        `;
+
+        this.showModal('Add Category', content, () => {
+            const form = document.getElementById('add-category-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            const name = document.getElementById('c-name').value.trim();
+            if (DataManager.addCategory(name)) {
+                if (onSuccess) onSuccess(name);
+                return true;
+            } else {
+                alert('This category already exists.');
+                return false;
+            }
+        });
+    }
+
     showAddTransactionModal() {
         const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
         
@@ -197,10 +295,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Category</label>
-                    <input type="text" id="t-category" list="category-list" class="form-control" placeholder="Search or type a new category" required>
-                    <datalist id="category-list">
-                        ${DataManager.getCategories('expense').map(c => `<option value="${c}"></option>`).join('')}
-                    </datalist>
+                    <input type="text" id="t-category" class="form-control" placeholder="Search or select a category" required autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Account</label>
@@ -238,16 +333,10 @@ class App {
             return true;
         });
 
-        // Add dynamic category updating when type changes
+        // Initialize Combo Box for category
         setTimeout(() => {
-            const typeSelect = document.getElementById('t-type');
-            const dataList = document.getElementById('category-list');
-            if (typeSelect && dataList) {
-                typeSelect.addEventListener('change', () => {
-                    const categories = DataManager.getCategories(typeSelect.value);
-                    dataList.innerHTML = categories.map(c => `<option value="${c}"></option>`).join('');
-                    document.getElementById('t-category').value = '';
-                });
+            if (window.ComboBox) {
+                new window.ComboBox('t-category', DataManager.getCategories());
             }
         }, 10);
     }
@@ -260,7 +349,6 @@ class App {
         const absAmount = Math.abs(tx.amount);
         
         const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === tx.accountId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
-        const initialCategories = DataManager.getCategories(isExpense ? 'expense' : 'income');
         
         const content = `
             <form id="edit-transaction-form">
@@ -285,10 +373,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Category</label>
-                    <input type="text" id="et-category" list="et-category-list" class="form-control" value="${tx.category}" required>
-                    <datalist id="et-category-list">
-                        ${initialCategories.map(c => `<option value="${c}"></option>`).join('')}
-                    </datalist>
+                    <input type="text" id="et-category" class="form-control" value="${tx.category}" placeholder="Search or select a category" required autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Account</label>
@@ -326,13 +411,8 @@ class App {
         });
 
         setTimeout(() => {
-            const typeSelect = document.getElementById('et-type');
-            const dataList = document.getElementById('et-category-list');
-            if (typeSelect && dataList) {
-                typeSelect.addEventListener('change', () => {
-                    const categories = DataManager.getCategories(typeSelect.value);
-                    dataList.innerHTML = categories.map(c => `<option value="${c}"></option>`).join('');
-                });
+            if (window.ComboBox) {
+                new window.ComboBox('et-category', DataManager.getCategories());
             }
         }, 10);
     }

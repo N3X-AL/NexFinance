@@ -346,3 +346,104 @@ const Components = {
         `;
     }
 };
+
+// Adding combobox class to manage UI behaviour globally
+class ComboBox {
+    constructor(inputElementId, options) {
+        this.input = document.getElementById(inputElementId);
+        if (!this.input) return;
+        this.options = options;
+
+        // Setup DOM structure
+        const wrapper = document.createElement('div');
+        wrapper.className = 'combo-box';
+
+        this.input.parentNode.insertBefore(wrapper, this.input);
+        wrapper.appendChild(this.input);
+
+        this.input.classList.add('combo-box-input');
+
+        const icon = document.createElement('span');
+        icon.className = 'material-icons-round combo-box-icon';
+        icon.textContent = 'expand_more';
+        wrapper.appendChild(icon);
+
+        this.dropdown = document.createElement('div');
+        this.dropdown.className = 'combo-box-dropdown';
+        wrapper.appendChild(this.dropdown);
+
+        // Event Listeners
+        this.input.addEventListener('focus', () => this.open());
+        this.input.addEventListener('input', () => this.filterOptions());
+
+        // Click outside to close
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target)) {
+                this.close();
+            }
+        });
+
+        this.renderOptions(this.options);
+    }
+
+    open() {
+        this.filterOptions();
+        this.dropdown.classList.add('active');
+    }
+
+    close() {
+        this.dropdown.classList.remove('active');
+    }
+
+    filterOptions() {
+        const val = this.input.value.toLowerCase();
+        const filtered = this.options.filter(opt => opt.toLowerCase().includes(val));
+        this.renderOptions(filtered);
+    }
+
+    renderOptions(opts) {
+        this.dropdown.innerHTML = '';
+
+        // Add new item logic at top
+        const addBtn = document.createElement('div');
+        addBtn.className = 'combo-box-option add-new';
+        addBtn.innerHTML = '<span class="material-icons-round" style="font-size: 16px;">add</span> Add Category';
+        // Need to stop propagation so click outside doesn't fire before we trigger
+        addBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            this.close();
+            if (typeof window.app !== 'undefined' && window.app.showAddCategoryModal) {
+                window.app.showAddCategoryModal((newCat) => {
+                    if (newCat) {
+                        this.options = DataManager.getCategories();
+                        this.input.value = newCat;
+                    }
+                });
+            }
+        });
+        this.dropdown.appendChild(addBtn);
+
+        if (opts.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'combo-box-option';
+            empty.style.color = 'var(--text-muted)';
+            empty.textContent = 'No matches found';
+            this.dropdown.appendChild(empty);
+            return;
+        }
+
+        opts.forEach(opt => {
+            const div = document.createElement('div');
+            div.className = 'combo-box-option';
+            div.textContent = opt;
+            div.onclick = () => {
+                this.input.value = opt;
+                this.close();
+                // trigger change event just in case
+                this.input.dispatchEvent(new Event('change'));
+            };
+            this.dropdown.appendChild(div);
+        });
+    }
+}
+window.ComboBox = ComboBox;
