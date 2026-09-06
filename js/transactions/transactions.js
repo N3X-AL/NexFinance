@@ -2,6 +2,19 @@ let _transactionsDocClickHandler = null;
 
 Views.transactions = () => {
     const regularTxs = DataManager.getRegularTransactions();
+    let txNow = new Date();
+    if (regularTxs.length > 0) {
+        let maxTime = 0;
+        for (const t of regularTxs) {
+            const time = new Date(t.date).getTime();
+            if (!isNaN(time) && time > maxTime) {
+                maxTime = time;
+            }
+        }
+        if (maxTime > 0) {
+            txNow = new Date(maxTime);
+        }
+    }
 
     const regularHTML = regularTxs.length > 0 ? Components.transactionTable(regularTxs) : Components.emptyState('receipt_long', 'No transactions yet', 'Start adding your income and expenses to track your finances.');
 
@@ -13,19 +26,6 @@ Views.transactions = () => {
         let isDateFiltered = false;
         let currentChartType = 'net'; // 'net' | 'income' | 'expense'
         let currentViewMode = 'daily'; // 'daily' | 'monthly'
-        let txNow = new Date();
-        if (regularTxs.length > 0) {
-            let maxTime = 0;
-            for (const t of regularTxs) {
-                const time = new Date(t.date).getTime();
-                if (!isNaN(time) && time > maxTime) {
-                    maxTime = time;
-                }
-            }
-            if (maxTime > 0) {
-                txNow = new Date(maxTime);
-            }
-        }
         let currentMonthlyMonth = txNow.getMonth();
         let currentMonthlyYear = txNow.getFullYear();
 

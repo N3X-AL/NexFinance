@@ -229,13 +229,14 @@ const DataManager = {
         startDate.setHours(0, 0, 0, 0);
 
         if (type === 'income' || type === 'expense') {
+            const targetAccountId = (accountId !== null && accountId !== 'all') ? parseInt(accountId) : null;
             // Only emit data points for days that actually have relevant transactions
             const grouped = {};
             [...appData.transactions]
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > now) return false;
-                    if (accountId !== null && accountId !== 'all' && t.accountId !== parseInt(accountId)) return false;
+                    if (targetAccountId !== null && t.accountId !== targetAccountId) return false;
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
@@ -367,12 +368,13 @@ const DataManager = {
         endDate.setHours(23, 59, 59, 999);
 
         if (type === 'income' || type === 'expense') {
+            const targetAccountId = (accountId !== null && accountId !== 'all') ? parseInt(accountId) : null;
             const grouped = {};
             [...appData.transactions]
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > endDate) return false;
-                    if (accountId !== null && accountId !== 'all' && t.accountId !== parseInt(accountId)) return false;
+                    if (targetAccountId !== null && t.accountId !== targetAccountId) return false;
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
