@@ -78,6 +78,16 @@ Views.loans = () => {
                 }
             });
             
+            Object.values(personGroups).forEach(pg => {
+                const sortLoans = (arr) => arr.sort((a, b) => {
+                    const dateDiff = new Date(b.date) - new Date(a.date);
+                    if (dateDiff !== 0) return dateDiff;
+                    return (b.id || 0) - (a.id || 0);
+                });
+                sortLoans(pg.activeLoans);
+                sortLoans(pg.settledLoans);
+            });
+
             const persons = Object.values(personGroups).sort((a, b) => Math.abs(b.netBalance) - Math.abs(a.netBalance));
             
             return `
