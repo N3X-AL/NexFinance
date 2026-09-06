@@ -79,11 +79,7 @@ Views.loans = () => {
             });
             
             Object.values(personGroups).forEach(pg => {
-                const sortLoans = (arr) => arr.sort((a, b) => {
-                    const dateDiff = new Date(b.date) - new Date(a.date);
-                    if (dateDiff !== 0) return dateDiff;
-                    return (b.id || 0) - (a.id || 0);
-                });
+                const sortLoans = (arr) => arr.sort((a, b) => (b.date || '').localeCompare(a.date || '') || ((b.id || 0) - (a.id || 0)));
                 sortLoans(pg.activeLoans);
                 sortLoans(pg.settledLoans);
             });

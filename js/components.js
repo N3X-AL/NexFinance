@@ -213,11 +213,7 @@ const Components = {
             // Get repayment history
             const allTxs = DataManager.getLoanTransactions().filter(t => t.loanId === loan.id);
             const repayments = allTxs.filter(t => t.merchant.startsWith('Loan Repayment') || (t.merchant.startsWith('Offset') && t.category === 'Loan'))
-                .sort((a, b) => {
-                    const dateDiff = new Date(b.date) - new Date(a.date);
-                    if (dateDiff !== 0) return dateDiff;
-                    return (b.id || 0) - (a.id || 0);
-                });
+                .sort((a, b) => (b.date || '').localeCompare(a.date || '') || ((b.id || 0) - (a.id || 0)));
 
             const historyHtml = repayments.length > 0 ? `
                 <div id="loan-history-${loan.id}" style="display: none; margin-top: 12px; border-top: 1px solid var(--border-light); padding-top: 12px;">

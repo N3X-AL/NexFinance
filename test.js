@@ -1,5 +1,6 @@
 const assert = require('assert');
 const fs = require('fs');
+const vm = require('vm');
 
 // Create mock global object
 global.window = global;
@@ -14,10 +15,11 @@ global.document = {
     addEventListener() {}
 };
 
-// Evaluate scripts directly in the node global context so const top-level vars are defined on global
+// Evaluate scripts in the global context while preserving lexical identifiers and attaching to global
 const evalFile = (path) => {
-    const code = fs.readFileSync(path, 'utf8');
-    eval?.(`(function() { ${code.replace(/const (DataManager|Components|CloudSync|appData|defaultData|savedData)/g, 'global.$1')} })()`);
+    let code = fs.readFileSync(path, 'utf8');
+    code = code.replace(/const\s+(DataManager|Components|CloudSync|appData|defaultData|savedData)\s*=/g, 'var $1 = global.$1 =');
+    vm.runInThisContext(code);
 };
 
 evalFile('./js/data.js');
