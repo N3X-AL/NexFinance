@@ -210,9 +210,13 @@ const Components = {
             const loanTx = DataManager.findLoanDisbursementTransaction(loan.id);
             const loanAccount = loanTx ? DataManager.getAccountById(loanTx.accountId) : null;
 
-            // Get repayment history
+            // Get repayment history (sorted newest first)
             const allTxs = DataManager.getLoanTransactions().filter(t => t.loanId === loan.id);
-            const repayments = allTxs.filter(t => t.merchant.startsWith('Loan Repayment') || (t.merchant.startsWith('Offset') && t.category === 'Loan'));
+            const repayments = allTxs.filter(t => t.merchant.startsWith('Loan Repayment') || (t.merchant.startsWith('Offset') && t.category === 'Loan')).sort((a, b) => {
+                const dateDiff = new Date(b.date) - new Date(a.date);
+                if (dateDiff !== 0) return dateDiff;
+                return (b.id || 0) - (a.id || 0);
+            });
 
             const historyHtml = repayments.length > 0 ? `
                 <div id="loan-history-${loan.id}" style="display: none; margin-top: 12px; border-top: 1px solid var(--border-light); padding-top: 12px;">
@@ -333,7 +337,11 @@ const Components = {
                         <span class="material-icons-round" style="font-size: 16px;">history</span>
                     </button>
                     <div id="settled-${safeId}" style="display: none;">
-                        ${settledLoans.map(l => renderSubLoan(l, true)).join('')}
+                        ${[...settledLoans].sort((a, b) => {
+                            const dateDiff = new Date(b.date) - new Date(a.date);
+                            if (dateDiff !== 0) return dateDiff;
+                            return (b.id || 0) - (a.id || 0);
+                        }).map(l => renderSubLoan(l, true)).join('')}
                         <div style="margin-top: 16px; text-align: center;">
                             <button class="btn btn-danger" style="width: 100%; padding: 8px 12px; font-size: 13px; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.deletePersonHistory('${name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">
                                 <span class="material-icons-round" style="font-size: 16px; margin-right: 4px; vertical-align: bottom;">delete_forever</span> Delete All History for ${name}
