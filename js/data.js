@@ -236,8 +236,8 @@ const DataManager = {
                     const td = new Date(t.date);
                     if (td < startDate || td > now) return false;
                     if (accountId !== null && accountId !== 'all' && t.accountId !== parseInt(accountId)) return false;
-                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
-                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
+                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
                 .filter(t => category && category !== 'all' ? t.category === category : true)
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -316,8 +316,8 @@ const DataManager = {
                         const td = new Date(t.date);
                         const tLabel = td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
                         if (tLabel !== label) return false;
-                        if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
-                        return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                        if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
+                        return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
                 .filter(t => category && category !== 'all' ? t.category === category : true)
                     .reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -373,8 +373,8 @@ const DataManager = {
                     const td = new Date(t.date);
                     if (td < startDate || td > endDate) return false;
                     if (accountId !== null && accountId !== 'all' && t.accountId !== parseInt(accountId)) return false;
-                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
-                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
+                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
                 .filter(t => category && category !== 'all' ? t.category === category : true)
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
