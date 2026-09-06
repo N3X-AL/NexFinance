@@ -271,10 +271,13 @@ Views.transactions = () => {
                                 if (!chartArea) return null;
 
                                 const yZero = scales.y.getPixelForValue(0);
-                                let rawZeroStop = (chartArea.bottom - yZero) / (chartArea.bottom - chartArea.top);
+                                const rawZeroStop = (chartArea.bottom - yZero) / (chartArea.bottom - chartArea.top);
 
-                                const startTransition = Math.max(0, Math.min(1, rawZeroStop - 0.05));
-                                const endTransition = Math.max(0, Math.min(1, rawZeroStop + 0.05));
+                                if (rawZeroStop <= 0) return '#10b981';
+                                if (rawZeroStop >= 1) return '#ef4444';
+
+                                const startTransition = Math.max(0, rawZeroStop - 0.05);
+                                const endTransition = Math.min(1, rawZeroStop + 0.05);
 
                                 const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
                                 gradient.addColorStop(0, '#ef4444');
@@ -289,8 +292,12 @@ Views.transactions = () => {
                                 if (!chartArea) return null;
 
                                 const yZero = scales.y.getPixelForValue(0);
-                                let zeroStop = (chartArea.bottom - yZero) / (chartArea.bottom - chartArea.top);
-                                zeroStop = Math.max(0, Math.min(1, zeroStop));
+                                const rawZeroStop = (chartArea.bottom - yZero) / (chartArea.bottom - chartArea.top);
+
+                                if (rawZeroStop <= 0) return 'rgba(16, 185, 129, 0.1)';
+                                if (rawZeroStop >= 1) return 'rgba(239, 68, 68, 0.1)';
+
+                                const zeroStop = rawZeroStop;
 
                                 const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
                                 gradient.addColorStop(0, 'rgba(239, 68, 68, 0.1)');
