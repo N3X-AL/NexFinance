@@ -606,6 +606,15 @@ const DataManager = {
         return new Date(dateString).toLocaleDateString('en-US', options);
     },
 
+    getLocalDateString: (date = new Date()) => {
+        const d = date instanceof Date ? date : new Date(date);
+        const validDate = isNaN(d.getTime()) ? new Date() : d;
+        const year = validDate.getFullYear();
+        const month = String(validDate.getMonth() + 1).padStart(2, '0');
+        const day = String(validDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    },
+
     addTransaction: (transaction) => {
         if (transaction.category) {
             transaction.category = transaction.category.trim();
@@ -892,7 +901,7 @@ const DataManager = {
             const merchantPrefix = loan.type === 'given' ? 'Lent' : 'Borrowed';
             
             DataManager.addTransaction({
-                date: new Date().toISOString().split('T')[0],
+                date: DataManager.getLocalDateString(),
                 merchant: `Loan ${actionText} (${merchantPrefix}): ${loan.person}`,
                 category: 'Loan',
                 amount: txAmount,
@@ -909,7 +918,7 @@ const DataManager = {
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
         
-        const repaymentDate = date || new Date().toISOString().split('T')[0];
+        const repaymentDate = date || DataManager.getLocalDateString();
         const remaining = loan.amount - loan.settledAmount;
         let actualRepayment = amount;
         let overpaidAmount = 0;

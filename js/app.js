@@ -310,7 +310,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Date</label>
-                    <input type="date" id="t-date" class="form-control" required value="${new Date().toISOString().split('T')[0]}">
+                    <input type="date" id="t-date" class="form-control" required value="${DataManager.getLocalDateString()}">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Merchant / Description</label>
@@ -477,7 +477,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Date</label>
-                    <input type="date" id="tf-date" class="form-control" required value="${new Date().toISOString().split('T')[0]}">
+                    <input type="date" id="tf-date" class="form-control" required value="${DataManager.getLocalDateString()}">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Note (Optional)</label>
@@ -693,7 +693,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Date</label>
-                    <input type="date" id="l-date" class="form-control" value="${new Date().toISOString().split('T')[0]}" required>
+                    <input type="date" id="l-date" class="form-control" value="${DataManager.getLocalDateString()}" required>
                 </div>
                 ${settlementField}
                 <div class="form-group" id="loan-account-group">
@@ -845,7 +845,7 @@ class App {
             <form id="record-repayment-form">
                 <div class="form-group">
                     <label class="form-label">Date</label>
-                    <input type="date" id="r-date" class="form-control" value="${new Date().toISOString().split('T')[0]}" required>
+                    <input type="date" id="r-date" class="form-control" value="${DataManager.getLocalDateString()}" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Amount to Record</label>
@@ -878,7 +878,7 @@ class App {
                 return false;
             }
 
-            const date = document.getElementById('r-date').value || new Date().toISOString().split('T')[0];
+            const date = document.getElementById('r-date').value || DataManager.getLocalDateString();
             const amount = parseFloat(document.getElementById('r-amount').value);
             const accountId = parseInt(document.getElementById('r-account').value);
             const isDirectPayment = document.getElementById('r-settlement').value === 'direct';
