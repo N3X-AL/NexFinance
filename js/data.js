@@ -200,7 +200,7 @@ const DataManager = {
         };
     },
 
-    getChartData: (type, months, category = null) => {
+    getChartData: (type, months, category = null, accountId = null) => {
         const labels = [];
         const data = [];
         // Get max date from transactions for a static dataset, otherwise fallback to now
@@ -235,6 +235,7 @@ const DataManager = {
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > now) return false;
+                    if (accountId !== null && accountId !== 'all' && t.accountId !== parseInt(accountId)) return false;
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
                 })
@@ -359,7 +360,7 @@ const DataManager = {
         return years.sort((a, b) => b - a);
     },
 
-    getDailyChartDataForMonth: (type, year, month, category = null) => {
+    getDailyChartDataForMonth: (type, year, month, category = null, accountId = null) => {
         const startDate = new Date(year, month, 1);
         startDate.setHours(0, 0, 0, 0);
         const endDate = new Date(year, month + 1, 0);
@@ -371,6 +372,7 @@ const DataManager = {
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > endDate) return false;
+                    if (accountId !== null && accountId !== 'all' && t.accountId !== parseInt(accountId)) return false;
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
                 })

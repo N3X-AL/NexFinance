@@ -104,14 +104,15 @@ Views.transactions = () => {
                     new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === currentDateFilterLabel
                 );
                 if (currentChartType === 'income') txsToRender = txsToRender.filter(t => t.amount > 0);
-                if (currentChartType === 'expense') txsToRender = txsToRender.filter(t => t.amount < 0);
+                if (currentChartType === 'expense') txsToRender = txsToRender.filter(t => t.amount < 0 && t.category !== 'Investment');
             }
 
             let emptyMessage = 'No transactions found';
             let emptySubMessage = 'No transactions match the selected filter.';
             if (isDateFiltered) {
                 emptyMessage = 'No transactions';
-                emptySubMessage = 'No transactions on ' + currentDateFilterLabel + (currentCategory !== 'all' ? ' matching the category filter.' : '.');
+                const hasFilter = currentCategory !== 'all' || currentAccount !== 'all';
+                emptySubMessage = 'No transactions on ' + currentDateFilterLabel + (hasFilter ? ' matching the selected filters.' : '.');
             }
 
             container.innerHTML = txsToRender.length > 0
@@ -206,45 +207,12 @@ Views.transactions = () => {
                 const legendEl = document.getElementById('tx-chart-legend');
                 if (legendEl) legendEl.style.display = 'flex';
             } else {
-                let pool = regularTxs.filter(t => {
-                    if (currentAccount !== 'all' && t.accountId !== parseInt(currentAccount)) return false;
-                    if (currentCategory !== 'all' && t.category !== currentCategory) return false;
-                    if (currentChartType === 'income') return t.amount > 0;
-                    return t.amount < 0 && t.category !== 'Investment';
-                });
-
-                if (currentViewMode === 'monthly') {
-                    const startDate = new Date(currentMonthlyYear, currentMonthlyMonth, 1);
-                    startDate.setHours(0, 0, 0, 0);
-                    const endDate = new Date(currentMonthlyYear, currentMonthlyMonth + 1, 0);
-                    endDate.setHours(23, 59, 59, 999);
-                    pool = pool.filter(t => {
-                        const d = new Date(t.date);
-                        return d >= startDate && d <= endDate;
-                    });
-                } else {
-                    const now = new Date(txNow);
-                    now.setHours(23, 59, 59, 999);
-                    const startDate = new Date(now);
-                    const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
-                    startDate.setMonth(startDate.getMonth() - currentMonths);
-                    if (startDate.getMonth() !== expectedMonth) {
-                        startDate.setDate(0);
-                    }
-                    startDate.setHours(0, 0, 0, 0);
-                    pool = pool.filter(t => new Date(t.date) >= startDate && new Date(t.date) <= now);
-                }
-
-                const grouped = {};
-                pool
-                    .sort((a, b) => new Date(a.date) - new Date(b.date))
-                    .forEach(t => {
-                        const d = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        grouped[d] = (grouped[d] || 0) + Math.abs(t.amount);
-                    });
-
-                labels = Object.keys(grouped);
-                data = Object.values(grouped);
+                // Use DataManager for income/expense data with account and category filters
+                const chartData = currentViewMode === 'monthly'
+                    ? DataManager.getDailyChartDataForMonth(currentChartType, currentMonthlyYear, currentMonthlyMonth, currentCategory, currentAccount)
+                    : DataManager.getChartData(currentChartType, currentMonths, currentCategory, currentAccount);
+                labels = chartData.labels;
+                data = chartData.data;
                 const total = data.reduce((a, b) => a + b, 0);
                 if (currentChartType === 'income') {
                     statLabel = 'Total Income';
@@ -496,7 +464,6 @@ Views.transactions = () => {
         if (categoryFilter) {
             categoryFilter.addEventListener('change', (e) => {
                 currentCategory = e.target.value;
-                renderTransactionsTable();
                 renderChart();
             });
         }
@@ -506,7 +473,6 @@ Views.transactions = () => {
             accountFilter.addEventListener('change', (e) => {
                 currentAccount = e.target.value;
                 updateCategoryDropdown();
-                renderTransactionsTable();
                 renderChart();
             });
         }
