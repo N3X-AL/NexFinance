@@ -200,7 +200,7 @@ const DataManager = {
         };
     },
 
-    getChartData: (type, months, category = null) => {
+    getChartData: (type, months, category = null, accountId = null) => {
         const labels = [];
         const data = [];
         // Get max date from transactions for a static dataset, otherwise fallback to now
@@ -229,14 +229,16 @@ const DataManager = {
         startDate.setHours(0, 0, 0, 0);
 
         if (type === 'income' || type === 'expense') {
+            const targetAccountId = (accountId !== null && accountId !== 'all') ? parseInt(accountId) : null;
             // Only emit data points for days that actually have relevant transactions
             const grouped = {};
             [...appData.transactions]
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > now) return false;
-                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
-                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                    if (targetAccountId !== null && t.accountId !== targetAccountId) return false;
+                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
+                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
                 .filter(t => category && category !== 'all' ? t.category === category : true)
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -315,8 +317,8 @@ const DataManager = {
                         const td = new Date(t.date);
                         const tLabel = td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
                         if (tLabel !== label) return false;
-                        if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
-                        return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                        if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
+                        return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
                 .filter(t => category && category !== 'all' ? t.category === category : true)
                     .reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -359,20 +361,22 @@ const DataManager = {
         return years.sort((a, b) => b - a);
     },
 
-    getDailyChartDataForMonth: (type, year, month, category = null) => {
+    getDailyChartDataForMonth: (type, year, month, category = null, accountId = null) => {
         const startDate = new Date(year, month, 1);
         startDate.setHours(0, 0, 0, 0);
         const endDate = new Date(year, month + 1, 0);
         endDate.setHours(23, 59, 59, 999);
 
         if (type === 'income' || type === 'expense') {
+            const targetAccountId = (accountId !== null && accountId !== 'all') ? parseInt(accountId) : null;
             const grouped = {};
             [...appData.transactions]
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > endDate) return false;
-                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer';
-                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer';
+                    if (targetAccountId !== null && t.accountId !== targetAccountId) return false;
+                    if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
+                    return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
                 .filter(t => category && category !== 'all' ? t.category === category : true)
                 .sort((a, b) => new Date(a.date) - new Date(b.date))

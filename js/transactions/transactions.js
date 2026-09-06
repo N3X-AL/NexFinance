@@ -2,6 +2,19 @@ let _transactionsDocClickHandler = null;
 
 Views.transactions = () => {
     const regularTxs = DataManager.getRegularTransactions();
+    let txNow = new Date();
+    if (regularTxs.length > 0) {
+        let maxTime = 0;
+        for (const t of regularTxs) {
+            const time = new Date(t.date).getTime();
+            if (!isNaN(time) && time > maxTime) {
+                maxTime = time;
+            }
+        }
+        if (maxTime > 0) {
+            txNow = new Date(maxTime);
+        }
+    }
 
     const regularHTML = regularTxs.length > 0 ? Components.transactionTable(regularTxs) : Components.emptyState('receipt_long', 'No transactions yet', 'Start adding your income and expenses to track your finances.');
 
@@ -13,37 +26,20 @@ Views.transactions = () => {
         let isDateFiltered = false;
         let currentChartType = 'net'; // 'net' | 'income' | 'expense'
         let currentViewMode = 'daily'; // 'daily' | 'monthly'
-        let txNow = new Date();
-        if (regularTxs.length > 0) {
-            let maxTime = 0;
-            for (const t of regularTxs) {
-                const time = new Date(t.date).getTime();
-                if (!isNaN(time) && time > maxTime) {
-                    maxTime = time;
-                }
-            }
-            if (maxTime > 0) {
-                txNow = new Date(maxTime);
-            }
-        }
         let currentMonthlyMonth = txNow.getMonth();
         let currentMonthlyYear = txNow.getFullYear();
 
         let currentCategory = 'all';
+        let currentAccount = 'all';
         let currentDateFilterLabel = null;
 
-        const renderTransactionsTable = () => {
-            const container = document.getElementById('transactions-page-container');
-            if (!container) return;
-
-            let txsToRender = regularTxs;
-
+        const getTxsInActiveTimeWindow = () => {
             if (currentViewMode === 'monthly') {
                 const startDate = new Date(currentMonthlyYear, currentMonthlyMonth, 1);
                 startDate.setHours(0, 0, 0, 0);
                 const endDate = new Date(currentMonthlyYear, currentMonthlyMonth + 1, 0);
                 endDate.setHours(23, 59, 59, 999);
-                txsToRender = txsToRender.filter(t => {
+                return regularTxs.filter(t => {
                     const d = new Date(t.date);
                     return d >= startDate && d <= endDate;
                 });
@@ -57,10 +53,53 @@ Views.transactions = () => {
                     startDate.setDate(0);
                 }
                 startDate.setHours(0, 0, 0, 0);
-                txsToRender = txsToRender.filter(t => {
+                return regularTxs.filter(t => {
                     const d = new Date(t.date);
                     return d >= startDate && d <= now;
                 });
+            }
+        };
+
+        const updateCategoryDropdown = () => {
+            const catSelect = document.getElementById('tx-category-filter');
+            if (!catSelect) return;
+
+            let pool = getTxsInActiveTimeWindow();
+            if (currentAccount !== 'all') {
+                const accId = parseInt(currentAccount);
+                pool = pool.filter(t => t.accountId === accId);
+            }
+
+            const usedCategories = [...new Set(pool.map(t => t.category).filter(Boolean))].sort();
+
+            if (currentCategory !== 'all' && !usedCategories.includes(currentCategory)) {
+                currentCategory = 'all';
+            }
+
+            catSelect.innerHTML = `
+                <option value="all">All Categories</option>
+                ${usedCategories.map(c => {
+                    const escaped = (c || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    return `<option value="${escaped}"${c === currentCategory ? ' selected' : ''}>${escaped}</option>`;
+                }).join('')}
+            `;
+        };
+
+        const renderTransactionsTable = () => {
+            const container = document.getElementById('transactions-page-container');
+            if (!container) return;
+
+            let txsToRender = getTxsInActiveTimeWindow();
+
+            // Apply account filter
+            if (currentAccount !== 'all') {
+                const accId = parseInt(currentAccount);
+                txsToRender = txsToRender.filter(t => t.accountId === accId);
+            }
+
+            // Apply category filter
+            if (currentCategory !== 'all') {
+                txsToRender = txsToRender.filter(t => t.category === currentCategory);
             }
 
             // Apply date filter if active
@@ -69,19 +108,15 @@ Views.transactions = () => {
                     new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === currentDateFilterLabel
                 );
                 if (currentChartType === 'income') txsToRender = txsToRender.filter(t => t.amount > 0);
-                if (currentChartType === 'expense') txsToRender = txsToRender.filter(t => t.amount < 0);
-            }
-
-            // Apply category filter
-            if (currentCategory !== 'all') {
-                txsToRender = txsToRender.filter(t => t.category === currentCategory);
+                if (currentChartType === 'expense') txsToRender = txsToRender.filter(t => t.amount < 0 && t.category !== 'Investment');
             }
 
             let emptyMessage = 'No transactions found';
             let emptySubMessage = 'No transactions match the selected filter.';
             if (isDateFiltered) {
                 emptyMessage = 'No transactions';
-                emptySubMessage = 'No transactions on ' + currentDateFilterLabel + (currentCategory !== 'all' ? ' matching the category filter.' : '.');
+                const hasFilter = currentCategory !== 'all' || currentAccount !== 'all';
+                emptySubMessage = 'No transactions on ' + currentDateFilterLabel + (hasFilter ? ' matching the selected filters.' : '.');
             }
 
             container.innerHTML = txsToRender.length > 0
@@ -123,9 +158,14 @@ Views.transactions = () => {
         };
 
         const renderChart = () => {
-            const ctx = document.getElementById('tx-cashflow-chart-canvas').getContext('2d');
+            renderTransactionsTable();
 
-            let labels, data, chartColor, chartBorderColor, statLabel, statColor;
+            if (typeof Chart === 'undefined') return;
+            const canvas = document.getElementById('tx-cashflow-chart-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            let labels, data, chartBorderColor, statLabel, statColor;
 
             if (currentChartType === 'net') {
                 // Group all transactions by day, summing net
@@ -151,10 +191,13 @@ Views.transactions = () => {
                     startDate.setHours(0, 0, 0, 0);
                     filteredTxs = regularTxs.filter(t => new Date(t.date) >= startDate);
                 }
-                const grouped = {};
+                if (currentAccount !== 'all') {
+                    filteredTxs = filteredTxs.filter(t => t.accountId === parseInt(currentAccount));
+                }
                 if (currentCategory !== 'all') {
                     filteredTxs = filteredTxs.filter(t => t.category === currentCategory);
                 }
+                const grouped = {};
                 filteredTxs
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .forEach(t => {
@@ -166,8 +209,6 @@ Views.transactions = () => {
                 const totalNet = data.reduce((a, b) => a + b, 0);
                 statLabel = totalNet >= 0 ? 'Net Gain' : 'Net Loss';
                 statColor = totalNet >= 0 ? 'var(--success)' : 'var(--danger)';
-                chartColor = data.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)');
-                chartBorderColor = data.map(v => v >= 0 ? '#10b981' : '#ef4444');
                 const statAmountEl = document.getElementById('tx-stat-amount');
                 const statLabelEl = document.getElementById('tx-stat-label');
                 if (statLabelEl) statLabelEl.textContent = statLabel;
@@ -175,22 +216,20 @@ Views.transactions = () => {
                 const legendEl = document.getElementById('tx-chart-legend');
                 if (legendEl) legendEl.style.display = 'flex';
             } else {
-                // Use DataManager for income/expense data
+                // Use DataManager for income/expense data with account and category filters
                 const chartData = currentViewMode === 'monthly'
-                    ? DataManager.getDailyChartDataForMonth(currentChartType, currentMonthlyYear, currentMonthlyMonth, currentCategory)
-                    : DataManager.getChartData(currentChartType, currentMonths, currentCategory);
+                    ? DataManager.getDailyChartDataForMonth(currentChartType, currentMonthlyYear, currentMonthlyMonth, currentCategory, currentAccount)
+                    : DataManager.getChartData(currentChartType, currentMonths, currentCategory, currentAccount);
                 labels = chartData.labels;
                 data = chartData.data;
                 const total = data.reduce((a, b) => a + b, 0);
                 if (currentChartType === 'income') {
                     statLabel = 'Total Income';
                     statColor = 'var(--success)';
-                    chartColor = 'rgba(16, 185, 129, 0.7)';
                     chartBorderColor = '#10b981';
                 } else {
                     statLabel = 'Total Expenses';
                     statColor = 'var(--danger)';
-                    chartColor = 'rgba(239, 68, 68, 0.7)';
                     chartBorderColor = '#ef4444';
                 }
                 const statAmountEl = document.getElementById('tx-stat-amount');
@@ -200,9 +239,6 @@ Views.transactions = () => {
                 const legendEl = document.getElementById('tx-chart-legend');
                 if (legendEl) legendEl.style.display = 'none';
             }
-
-            // Reset table
-            renderTransactionsTable();
 
             if (chartInstance) chartInstance.destroy();
 
@@ -223,25 +259,75 @@ Views.transactions = () => {
 
             if (currentChartType === 'net') {
                 chartInstance = new Chart(ctx, {
-                    type: 'bar',
+                    type: 'line',
                     data: {
                         labels,
                         datasets: [{
                             label: 'Net',
                             data,
-                            backgroundColor: chartColor,
-                            borderColor: chartBorderColor,
-                            borderWidth: 1,
-                            borderRadius: 4
+                            borderColor: function(context) {
+                                const chart = context.chart;
+                                const {ctx, chartArea, scales} = chart;
+                                if (!chartArea) return null;
+
+                                const yZero = scales.y.getPixelForValue(0);
+                                const rawZeroStop = (chartArea.bottom - yZero) / (chartArea.bottom - chartArea.top);
+
+                                if (rawZeroStop <= 0) return '#10b981';
+                                if (rawZeroStop >= 1) return '#ef4444';
+
+                                const startTransition = Math.max(0, rawZeroStop - 0.05);
+                                const endTransition = Math.min(1, rawZeroStop + 0.05);
+
+                                const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+                                gradient.addColorStop(0, '#ef4444');
+                                if (startTransition > 0) gradient.addColorStop(startTransition, '#ef4444');
+                                if (endTransition < 1) gradient.addColorStop(endTransition, '#10b981');
+                                gradient.addColorStop(1, '#10b981');
+                                return gradient;
+                            },
+                            backgroundColor: function(context) {
+                                const chart = context.chart;
+                                const {ctx, chartArea, scales} = chart;
+                                if (!chartArea) return null;
+
+                                const yZero = scales.y.getPixelForValue(0);
+                                const rawZeroStop = (chartArea.bottom - yZero) / (chartArea.bottom - chartArea.top);
+
+                                if (rawZeroStop <= 0) return 'rgba(16, 185, 129, 0.1)';
+                                if (rawZeroStop >= 1) return 'rgba(239, 68, 68, 0.1)';
+
+                                const zeroStop = rawZeroStop;
+
+                                const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+                                gradient.addColorStop(0, 'rgba(239, 68, 68, 0.1)');
+                                gradient.addColorStop(zeroStop, 'rgba(239, 68, 68, 0.1)');
+                                gradient.addColorStop(zeroStop, 'rgba(16, 185, 129, 0.1)');
+                                gradient.addColorStop(1, 'rgba(16, 185, 129, 0.1)');
+                                return gradient;
+                            },
+                            borderWidth: 2,
+                            pointBackgroundColor: data.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+                            pointRadius: data.length > 45 ? 0 : 3,
+                            pointHitRadius: 10,
+                            pointHoverRadius: 6,
+                            fill: true,
+                            tension: 0.2
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
                         onClick: onChartClick,
                         plugins: {
                             legend: { display: false },
                             tooltip: {
+                                mode: 'index',
+                                intersect: false,
                                 callbacks: {
                                     label: function(context) {
                                         const val = context.raw;
@@ -258,7 +344,7 @@ Views.transactions = () => {
                             },
                             x: {
                                 grid: { display: false },
-                                ticks: { color: '#9ca3af', maxTicksLimit: 8, maxRotation: 0 }
+                                ticks: { color: '#9ca3af', maxTicksLimit: 12, maxRotation: 0 }
                             }
                         }
                     }
@@ -313,10 +399,8 @@ Views.transactions = () => {
             }
         };
 
-        if (typeof Chart !== 'undefined') {
-            renderChart();
-            updateTxViewModeUI();
-        }
+        renderChart();
+        updateTxViewModeUI();
 
         const onDocClick = (e) => {
             const canvas = document.getElementById('tx-cashflow-chart-canvas');
@@ -357,6 +441,7 @@ Views.transactions = () => {
                 e.currentTarget.style.color = 'white';
                 currentViewMode = e.currentTarget.getAttribute('data-mode');
                 updateTxViewModeUI();
+                updateCategoryDropdown();
                 isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
@@ -365,6 +450,7 @@ Views.transactions = () => {
         document.getElementById('tx-chart-months-slider').addEventListener('input', (e) => {
             currentMonths = parseInt(e.target.value);
             document.getElementById('tx-chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
+            updateCategoryDropdown();
             isDateFiltered = false; currentDateFilterLabel = null;
             renderChart();
         });
@@ -373,6 +459,7 @@ Views.transactions = () => {
         if (txMonthSelectEl) {
             txMonthSelectEl.addEventListener('change', (e) => {
                 currentMonthlyMonth = parseInt(e.target.value);
+                updateCategoryDropdown();
                 isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
@@ -382,6 +469,7 @@ Views.transactions = () => {
         if (txYearSelectEl) {
             txYearSelectEl.addEventListener('change', (e) => {
                 currentMonthlyYear = parseInt(e.target.value);
+                updateCategoryDropdown();
                 isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
@@ -391,20 +479,46 @@ Views.transactions = () => {
         if (categoryFilter) {
             categoryFilter.addEventListener('change', (e) => {
                 currentCategory = e.target.value;
-                // renderTransactionsTable will apply both currentCategory and currentDateFilterLabel
-                renderTransactionsTable();
                 renderChart();
             });
         }
 
+        const accountFilter = document.getElementById('tx-account-filter');
+        if (accountFilter) {
+            accountFilter.addEventListener('change', (e) => {
+                currentAccount = e.target.value;
+                updateCategoryDropdown();
+                renderChart();
+            });
+        }
+
+        updateCategoryDropdown();
+
     }, 50);
+
+    const initialPool = (() => {
+        const now = new Date(txNow);
+        now.setHours(23, 59, 59, 999);
+        const startDate = new Date(now);
+        const expectedMonth = (startDate.getMonth() - 1 + 12) % 12;
+        startDate.setMonth(startDate.getMonth() - 1);
+        if (startDate.getMonth() !== expectedMonth) {
+            startDate.setDate(0);
+        }
+        startDate.setHours(0, 0, 0, 0);
+        return regularTxs.filter(t => {
+            const d = new Date(t.date);
+            return d >= startDate && d <= now;
+        });
+    })();
+    const initialCategories = [...new Set(initialPool.map(t => t.category).filter(Boolean))].sort();
 
     return `
         <div class="card animate-slide-up" style="margin-bottom: 24px;">
             <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
                 <div>
                     <h3 class="card-title" id="tx-chart-title">Daily Cashflow</h3>
-                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Tap a bar to see that day's transactions</p>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Tap a point to see that day's transactions</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     <div class="chart-type-tabs" style="display: flex; gap: 4px; background: var(--bg-surface-solid); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);">
@@ -465,9 +579,16 @@ Views.transactions = () => {
                 <div style="display: flex; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 12px;">
                     <h3 class="card-title">All Transactions</h3>
                     <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <select id="tx-account-filter" aria-label="Filter transactions by account" style="background: var(--bg-surface-solid); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; padding: 6px 12px; border-radius: var(--radius-md); outline: none; cursor: pointer;">
+                            <option value="all">All Accounts</option>
+                            ${(appData.accounts || []).map(a => {
+                                const escaped = (a.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                return `<option value="${a.id}">${escaped}</option>`;
+                            }).join('')}
+                        </select>
                         <select id="tx-category-filter" aria-label="Filter transactions by category" style="background: var(--bg-surface-solid); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; padding: 6px 12px; border-radius: var(--radius-md); outline: none; cursor: pointer;">
                             <option value="all">All Categories</option>
-                            ${[...new Set(regularTxs.map(t => t.category))].sort().map(c => {
+                            ${initialCategories.map(c => {
                                 const escaped = (c || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                                 return `<option value="${escaped}">${escaped}</option>`;
                             }).join('')}
@@ -477,7 +598,7 @@ Views.transactions = () => {
                 </div>
             </div>
             <div id="transactions-page-container">
-                \${regularHTML}
+                ${regularHTML}
             </div>
         </div>
     `;
