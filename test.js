@@ -31,6 +31,7 @@ console.log("Running Loan History Sorting Tests...");
 // Reset Data in DataManager
 const loans = global.DataManager.getLoans();
 loans.length = 0;
+global.appData.transactions.length = 0;
 
 // Add loan
 global.DataManager.addLoan({
@@ -70,6 +71,7 @@ console.log("✔ Repayment history descending order test passed!");
 
 // Test 2: Settled Loans list sorting
 loans.length = 0;
+global.appData.transactions.length = 0;
 global.DataManager.addLoan({ person: 'Bob', type: 'given', amount: 1000, date: '2026-02-01', description: 'Old Loan' }, 1);
 const oldLoan = global.DataManager.getLoans()[0];
 global.DataManager.recordLoanRepayment(oldLoan.id, 1000, 1, false, 'Full Pay', '2026-02-01');
