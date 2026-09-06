@@ -33,13 +33,42 @@ Views.transactions = () => {
         let currentAccount = 'all';
         let currentDateFilterLabel = null;
 
+        const getTxsInActiveTimeWindow = () => {
+            if (currentViewMode === 'monthly') {
+                const startDate = new Date(currentMonthlyYear, currentMonthlyMonth, 1);
+                startDate.setHours(0, 0, 0, 0);
+                const endDate = new Date(currentMonthlyYear, currentMonthlyMonth + 1, 0);
+                endDate.setHours(23, 59, 59, 999);
+                return regularTxs.filter(t => {
+                    const d = new Date(t.date);
+                    return d >= startDate && d <= endDate;
+                });
+            } else {
+                const now = new Date(txNow);
+                now.setHours(23, 59, 59, 999);
+                const startDate = new Date(now);
+                const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
+                startDate.setMonth(startDate.getMonth() - currentMonths);
+                if (startDate.getMonth() !== expectedMonth) {
+                    startDate.setDate(0);
+                }
+                startDate.setHours(0, 0, 0, 0);
+                return regularTxs.filter(t => {
+                    const d = new Date(t.date);
+                    return d >= startDate && d <= now;
+                });
+            }
+        };
+
         const updateCategoryDropdown = () => {
             const catSelect = document.getElementById('tx-category-filter');
             if (!catSelect) return;
 
-            const pool = currentAccount === 'all'
-                ? regularTxs
-                : regularTxs.filter(t => t.accountId === parseInt(currentAccount));
+            let pool = getTxsInActiveTimeWindow();
+            if (currentAccount !== 'all') {
+                const accId = parseInt(currentAccount);
+                pool = pool.filter(t => t.accountId === accId);
+            }
 
             const usedCategories = [...new Set(pool.map(t => t.category).filter(Boolean))].sort();
 
@@ -60,32 +89,7 @@ Views.transactions = () => {
             const container = document.getElementById('transactions-page-container');
             if (!container) return;
 
-            let txsToRender = regularTxs;
-
-            if (currentViewMode === 'monthly') {
-                const startDate = new Date(currentMonthlyYear, currentMonthlyMonth, 1);
-                startDate.setHours(0, 0, 0, 0);
-                const endDate = new Date(currentMonthlyYear, currentMonthlyMonth + 1, 0);
-                endDate.setHours(23, 59, 59, 999);
-                txsToRender = txsToRender.filter(t => {
-                    const d = new Date(t.date);
-                    return d >= startDate && d <= endDate;
-                });
-            } else {
-                const now = new Date(txNow);
-                now.setHours(23, 59, 59, 999);
-                const startDate = new Date(now);
-                const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
-                startDate.setMonth(startDate.getMonth() - currentMonths);
-                if (startDate.getMonth() !== expectedMonth) {
-                    startDate.setDate(0);
-                }
-                startDate.setHours(0, 0, 0, 0);
-                txsToRender = txsToRender.filter(t => {
-                    const d = new Date(t.date);
-                    return d >= startDate && d <= now;
-                });
-            }
+            let txsToRender = getTxsInActiveTimeWindow();
 
             // Apply account filter
             if (currentAccount !== 'all') {
@@ -430,6 +434,7 @@ Views.transactions = () => {
                 e.currentTarget.style.color = 'white';
                 currentViewMode = e.currentTarget.getAttribute('data-mode');
                 updateTxViewModeUI();
+                updateCategoryDropdown();
                 isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
@@ -438,6 +443,7 @@ Views.transactions = () => {
         document.getElementById('tx-chart-months-slider').addEventListener('input', (e) => {
             currentMonths = parseInt(e.target.value);
             document.getElementById('tx-chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
+            updateCategoryDropdown();
             isDateFiltered = false; currentDateFilterLabel = null;
             renderChart();
         });
@@ -446,6 +452,7 @@ Views.transactions = () => {
         if (txMonthSelectEl) {
             txMonthSelectEl.addEventListener('change', (e) => {
                 currentMonthlyMonth = parseInt(e.target.value);
+                updateCategoryDropdown();
                 isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
@@ -455,6 +462,7 @@ Views.transactions = () => {
         if (txYearSelectEl) {
             txYearSelectEl.addEventListener('change', (e) => {
                 currentMonthlyYear = parseInt(e.target.value);
+                updateCategoryDropdown();
                 isDateFiltered = false; currentDateFilterLabel = null;
                 renderChart();
             });
@@ -477,9 +485,26 @@ Views.transactions = () => {
             });
         }
 
+        updateCategoryDropdown();
+
     }, 50);
 
-    const initialCategories = [...new Set(regularTxs.map(t => t.category).filter(Boolean))].sort();
+    const initialPool = (() => {
+        const now = new Date(txNow);
+        now.setHours(23, 59, 59, 999);
+        const startDate = new Date(now);
+        const expectedMonth = (startDate.getMonth() - 1 + 12) % 12;
+        startDate.setMonth(startDate.getMonth() - 1);
+        if (startDate.getMonth() !== expectedMonth) {
+            startDate.setDate(0);
+        }
+        startDate.setHours(0, 0, 0, 0);
+        return regularTxs.filter(t => {
+            const d = new Date(t.date);
+            return d >= startDate && d <= now;
+        });
+    })();
+    const initialCategories = [...new Set(initialPool.map(t => t.category).filter(Boolean))].sort();
 
     return `
         <div class="card animate-slide-up" style="margin-bottom: 24px;">
