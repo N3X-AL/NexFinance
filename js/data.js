@@ -731,7 +731,7 @@ const DataManager = {
             
             const isDirectPayment = loan.settlementType === 'direct';
             // Recording an auto-repayment. If the current new loan is direct payment, the offset is direct too.
-            DataManager.recordLoanRepayment(opLoan.id, offset, accountId, isDirectPayment, `Offset against new loan: ${loan.description || ''}`);
+            DataManager.recordLoanRepayment(opLoan.id, offset, accountId, isDirectPayment, `Offset against new loan: ${loan.description || ''}`, loan.date);
             remainingAmount -= offset;
         }
 
@@ -905,10 +905,11 @@ const DataManager = {
         DataManager.saveData();
     },
 
-    recordLoanRepayment: (loanId, amount, accountId, isDirectPayment = false, description = '') => {
+    recordLoanRepayment: (loanId, amount, accountId, isDirectPayment = false, description = '', date = null) => {
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
         
+        const repaymentDate = date || new Date().toISOString().split('T')[0];
         const remaining = loan.amount - loan.settledAmount;
         let actualRepayment = amount;
         let overpaidAmount = 0;
@@ -929,7 +930,7 @@ const DataManager = {
             if (description) merchant += ` (${description})`;
             
             DataManager.addTransaction({
-                date: new Date().toISOString().split('T')[0],
+                date: repaymentDate,
                 merchant: merchant,
                 category: 'Loan',
                 amount: txAmount,
@@ -945,7 +946,7 @@ const DataManager = {
                 person: loan.person,
                 amount: overpaidAmount,
                 type: newType,
-                date: new Date().toISOString().split('T')[0],
+                date: repaymentDate,
                 description: description || `Overpayment from loan #${loan.id}`,
                 settlementType: isDirectPayment ? 'direct' : 'cash'
             }, accountId);
