@@ -154,7 +154,12 @@ Views.transactions = () => {
         };
 
         const renderChart = () => {
-            const ctx = document.getElementById('tx-cashflow-chart-canvas').getContext('2d');
+            renderTransactionsTable();
+
+            if (typeof Chart === 'undefined') return;
+            const canvas = document.getElementById('tx-cashflow-chart-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
 
             let labels, data, chartBorderColor, statLabel, statColor;
 
@@ -230,9 +235,6 @@ Views.transactions = () => {
                 const legendEl = document.getElementById('tx-chart-legend');
                 if (legendEl) legendEl.style.display = 'none';
             }
-
-            // Reset table
-            renderTransactionsTable();
 
             if (chartInstance) chartInstance.destroy();
 
@@ -386,10 +388,8 @@ Views.transactions = () => {
             }
         };
 
-        if (typeof Chart !== 'undefined') {
-            renderChart();
-            updateTxViewModeUI();
-        }
+        renderChart();
+        updateTxViewModeUI();
 
         const onDocClick = (e) => {
             const canvas = document.getElementById('tx-cashflow-chart-canvas');
