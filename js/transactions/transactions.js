@@ -16,13 +16,30 @@ Views.transactions = () => {
         }
     }
 
-    const regularHTML = regularTxs.length > 0 ? Components.transactionTable(regularTxs) : Components.emptyState('receipt_long', 'No transactions yet', 'Start adding your income and expenses to track your finances.');
+    const initialPool = (() => {
+        const now = new Date(txNow);
+        now.setHours(23, 59, 59, 999);
+        const startDate = new Date(now);
+        const expectedMonth = (startDate.getMonth() - 1 + 12) % 12;
+        startDate.setMonth(startDate.getMonth() - 1);
+        if (startDate.getMonth() !== expectedMonth) {
+            startDate.setDate(0);
+        }
+        startDate.setHours(0, 0, 0, 0);
+        return regularTxs.filter(t => {
+            const d = new Date(t.date);
+            return d >= startDate && d <= now;
+        });
+    })();
+    const initialCategories = [...new Set(initialPool.map(t => t.category).filter(Boolean))].sort();
+
+    const regularHTML = initialPool.length > 0 ? Components.transactionTable(initialPool) : Components.emptyState('receipt_long', 'No transactions yet', 'Start adding your income and expenses to track your finances.');
 
     const monthStops = DataManager.getTransactionMonthStops();
     const maxMonths = monthStops[monthStops.length - 1];
 
     setTimeout(() => {
-        if (!document.getElementById('tx-cashflow-chart-canvas')) return;
+        if (typeof document === 'undefined' || !document.getElementById || !document.getElementById('tx-cashflow-chart-canvas')) return;
 
         let currentStopIndex = 0;
         let currentMonths = monthStops[currentStopIndex] || 1;
@@ -169,8 +186,10 @@ Views.transactions = () => {
             }
         };
 
-        const renderChart = () => {
-            renderTransactionsTable();
+        const renderChart = (skipTableUpdate = false) => {
+            if (!skipTableUpdate) {
+                renderTransactionsTable();
+            }
 
             if (typeof Chart === 'undefined') return;
             const canvas = document.getElementById('tx-cashflow-chart-canvas');
@@ -414,7 +433,7 @@ Views.transactions = () => {
             }
         };
 
-        renderChart();
+        renderChart(true);
         updateTxViewModeUI();
 
         const onDocClick = (e) => {
@@ -511,23 +530,6 @@ Views.transactions = () => {
         updateCategoryDropdown();
 
     }, 50);
-
-    const initialPool = (() => {
-        const now = new Date(txNow);
-        now.setHours(23, 59, 59, 999);
-        const startDate = new Date(now);
-        const expectedMonth = (startDate.getMonth() - 1 + 12) % 12;
-        startDate.setMonth(startDate.getMonth() - 1);
-        if (startDate.getMonth() !== expectedMonth) {
-            startDate.setDate(0);
-        }
-        startDate.setHours(0, 0, 0, 0);
-        return regularTxs.filter(t => {
-            const d = new Date(t.date);
-            return d >= startDate && d <= now;
-        });
-    })();
-    const initialCategories = [...new Set(initialPool.map(t => t.category).filter(Boolean))].sort();
 
     return `
         <div class="card animate-slide-up" style="margin-bottom: 24px;">

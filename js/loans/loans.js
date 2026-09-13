@@ -12,7 +12,7 @@ Views.loans = () => {
 
     return `
         <div class="dashboard-grid" style="margin-bottom: 24px;">
-            <div class="col-span-6 animate-slide-up" style="animation-delay: 0.1s;">
+            <div class="col-span-6 animate-slide-up">
                 <div class="card stat-card" style="height: 100%;">
                     <div class="card-header" style="margin-bottom: 0;">
                         <h3 class="card-title text-secondary">Money to Take</h3>
@@ -27,7 +27,7 @@ Views.loans = () => {
                     </div>
                 </div>
             </div>
-            <div class="col-span-6 animate-slide-up" style="animation-delay: 0.15s;">
+            <div class="col-span-6 animate-slide-up">
                 <div class="card stat-card" style="height: 100%;">
                     <div class="card-header" style="margin-bottom: 0;">
                         <h3 class="card-title text-secondary">Money to Return</h3>
