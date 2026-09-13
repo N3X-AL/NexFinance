@@ -828,7 +828,7 @@ Views.tax = () => {
                 <div class="tax-compliance-icon">
                     <span class="material-icons-round">verified_user</span>
                 </div>
-                <div>
+                <div class="tax-compliance-content">
                     <div class="tax-compliance-title">
                         <span>Pakistan Tax & Wealth Statement Compliance</span>
                         <span class="tax-tag tax-tag-deductible">FBR IRIS Form 114 Ready</span>
@@ -856,14 +856,18 @@ Views.tax = () => {
                     </button>
                 </div>
                 
-                <div class="tax-filter-controls" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="tax-filter-controls">
                     <div class="tax-date-inputs">
-                        <span class="text-secondary" style="font-size: 13px;">From</span>
-                        <input type="date" id="tax-start-date" value="${startDate}">
-                        <span class="text-secondary" style="font-size: 13px;">To</span>
-                        <input type="date" id="tax-end-date" value="${endDate}">
+                        <div class="tax-date-field">
+                            <span class="text-secondary" style="font-size: 12px; font-weight: 500;">From</span>
+                            <input type="date" id="tax-start-date" value="${startDate}">
+                        </div>
+                        <div class="tax-date-field">
+                            <span class="text-secondary" style="font-size: 12px; font-weight: 500;">To</span>
+                            <input type="date" id="tax-end-date" value="${endDate}">
+                        </div>
                     </div>
-                    <div class="tax-actions-row" style="display: flex; align-items: center; gap: 8px;">
+                    <div class="tax-actions-row">
                         <button class="btn btn-secondary" id="tax-export-btn" title="Download Tax Filing CSV">
                             <span class="material-icons-round" style="font-size: 18px;">download</span>
                             <span>Export CSV</span>
