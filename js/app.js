@@ -118,6 +118,7 @@ class App {
             loans: { title: 'Friendly Loans', sub: 'Track money you lend to or borrow from others.' },
             investments: { title: 'Investments', sub: 'Monitor your portfolio performance.' },
             reports: { title: 'Reports', sub: 'Analyze your financial trends.' },
+            tax: { title: 'Tax & Compliance', sub: 'Pakistan Fiscal Year expense report & wealth reconciliation.' },
             settings: { title: 'Settings', sub: 'Configure your application preferences.' }
         };
         
