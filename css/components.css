@@ -454,6 +454,7 @@
     margin-bottom: 6px;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
@@ -723,6 +724,176 @@
 
 .card-header-collapsible:hover {
     opacity: 0.85;
+}
+
+/* Mobile Responsiveness for Tax & Compliance */
+@media (max-width: 768px) {
+    .tax-compliance-banner {
+        padding: 12px 16px;
+        gap: 12px;
+    }
+    
+    .tax-compliance-title {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .tax-filter-bar {
+        padding: 12px 14px;
+        gap: 12px;
+    }
+
+    .tax-presets {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        width: 100%;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .tax-presets::-webkit-scrollbar {
+        display: none;
+    }
+
+    .tax-preset-pill {
+        white-space: nowrap;
+        flex-shrink: 0;
+        padding: 5px 12px;
+        font-size: 12px;
+    }
+
+    .tax-filter-controls {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .tax-date-inputs {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .tax-date-inputs input[type="date"] {
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+
+    .tax-actions-row {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+    }
+
+    .tax-actions-row .btn {
+        flex: 1;
+        justify-content: center;
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+
+    .tax-type-toggle {
+        width: 100%;
+    }
+
+    .tax-type-btn {
+        flex: 1;
+        text-align: center;
+        padding: 6px 8px;
+        font-size: 11px;
+    }
+
+    .tax-base-row {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+
+    .tax-base-row-input-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .tax-base-row-input-group input {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .tax-table-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .tax-search-box {
+        max-width: 100%;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .tax-account-filter-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .tax-account-filter-wrap select {
+        flex: 1;
+        margin-left: 8px;
+    }
+
+    .tax-card-header-flex {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+}
+
+@media (max-width: 480px) {
+    .tax-compliance-icon {
+        width: 36px;
+        height: 36px;
+    }
+
+    .tax-compliance-icon .material-icons-round {
+        font-size: 20px;
+    }
+
+    .tax-compliance-title {
+        font-size: 14px;
+    }
+
+    .tax-compliance-text {
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    .tax-slab-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .tax-slab-metric-box {
+        padding: 10px 12px;
+    }
+
+    .tax-slab-metric-val {
+        font-size: 16px;
+    }
+
+    .tax-slab-metric-label {
+        font-size: 11px;
+    }
+
+    .tax-slab-metric-sub {
+        font-size: 10px;
+    }
 }
 
 /* Print Styles */
