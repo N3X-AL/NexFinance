@@ -137,7 +137,28 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(!dashboardHtml.includes('animation-delay'), "dashboard view must not contain animation-delay");
     assert(!global.Views.loans().includes('animation-delay'), "loans view must not contain animation-delay");
     assert(!global.Views.tax().includes('animation-delay'), "tax view must not contain animation-delay");
-    console.log("✔ Animation-delay elimination across dashboard, loans, and tax passed!");
+    // Test 8: Tax view mobile table data-label attributes
+    global.appData.transactions.push({
+        id: 999,
+        date: '2026-08-01',
+        amount: -500,
+        category: 'Food',
+        merchant: 'Lunch Cafe',
+        accountId: 1
+    });
+    const taxWithRows = global.Views.tax();
+    assert(taxWithRows.includes('data-label="Date"'), "tax tables must include data-label='Date' for mobile responsiveness");
+    assert(taxWithRows.includes('data-label="Payee"'), "tax allowable expenses table must include data-label='Payee' for mobile responsiveness");
+    assert(taxWithRows.includes('data-label="Amount"'), "tax tables must include data-label='Amount' for mobile responsiveness");
+    console.log("✔ Tax view mobile table data-label test passed!");
+
+    // Test 9: CSS grid definitions and mobile responsiveness rules for tax
+    const layoutCss = fs.readFileSync('./css/layout.css', 'utf8');
+    assert(layoutCss.includes('.col-span-7 { grid-column: span 7; }'), "layout.css must define .col-span-7");
+    assert(layoutCss.includes('.col-span-5 { grid-column: span 5; }'), "layout.css must define .col-span-5");
+    assert(cssContent.includes('.tax-presets {\n        overflow-x: auto;') || cssContent.includes('overflow-x: auto;'), "components.css must include mobile scrolling for tax-presets");
+    assert(cssContent.includes('.tax-type-toggle {\n        width: 100%;') || cssContent.includes('width: 100%;'), "components.css must include mobile full-width for tax-type-toggle");
+    console.log("✔ Tax view mobile CSS definitions test passed!");
 
     console.log("All tests passed successfully!");
 })();

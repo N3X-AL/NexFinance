@@ -475,7 +475,7 @@ const TaxManager = {
             <div class="card tax-slab-card animate-slide-up" style="margin-bottom: 24px;">
                 <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
                     <div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="tax-card-header-flex" style="display: flex; align-items: center; gap: 8px;">
                             <h3 class="card-title">Pakistan Income Tax Slab Estimator</h3>
                             <span class="tax-tag tax-tag-deductible">Finance Act Statutory Slabs</span>
                         </div>
@@ -484,7 +484,7 @@ const TaxManager = {
                         </p>
                     </div>
                     
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; max-width: 320px;">
                         <div class="tax-type-toggle">
                             <button class="tax-type-btn ${taxpayerType === 'salaried' ? 'active' : ''}" id="tax-toggle-salaried" data-type="salaried">
                                 Salaried Individual
@@ -497,12 +497,12 @@ const TaxManager = {
                 </div>
 
                 <!-- Taxable Base & Slab Overview -->
-                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 12px 16px;">
-                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="tax-base-row" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 12px 16px;">
+                    <div class="tax-base-row-input-group" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <span style="font-size: 13px; font-weight: 500;">Taxable Income Base:</span>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <input type="number" id="tax-income-input" value="${taxEst.taxableIncome}" style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 5px 10px; font-size: 14px; font-weight: 600; width: 140px;" min="0">
-                            <button class="btn btn-secondary" id="tax-income-reset-btn" style="padding: 4px 8px; font-size: 11px;" title="Reset to actual period income">
+                        <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                            <input type="number" id="tax-income-input" value="${taxEst.taxableIncome}" style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 5px 10px; font-size: 14px; font-weight: 600; width: 140px; min-width: 0;" min="0">
+                            <button class="btn btn-secondary" id="tax-income-reset-btn" style="padding: 4px 8px; font-size: 11px; flex-shrink: 0;" title="Reset to actual period income">
                                 <span class="material-icons-round" style="font-size: 14px;">sync</span> Actual
                             </button>
                         </div>
@@ -558,9 +558,9 @@ const TaxManager = {
                             <span class="tax-tag tax-tag-deductible">${currentReport.categories.length} Categories</span>
                         </div>
                         
-                        <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 240px; position: relative;">
+                        <div class="chart-container" style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 220px; position: relative; width: 100%;">
                             ${hasExpenses ? `
-                                <canvas id="tax-category-chart" style="max-height: 240px;"></canvas>
+                                <canvas id="tax-category-chart"></canvas>
                             ` : Components.emptyState('pie_chart', 'No expenses recorded', 'No deductible expenses found in the selected time frame.')}
                         </div>
                     </div>
@@ -617,7 +617,7 @@ const TaxManager = {
             <div class="card animate-slide-up" style="margin-bottom: 24px;">
                 <div class="card-header card-header-collapsible" id="tax-loan-audit-header" style="margin-bottom: 0;">
                     <div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="tax-card-header-flex" style="display: flex; align-items: center; gap: 8px;">
                             <h3 class="card-title">Loan Capital Reconciliation (Assets & Liabilities Audit)</h3>
                             <span class="tax-tag tax-tag-capital-asset">Balance Sheet Quarantined</span>
                         </div>
@@ -658,13 +658,13 @@ const TaxManager = {
 
                                         return `
                                             <tr>
-                                                <td style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(m.date)}</td>
-                                                <td>
+                                                <td data-label="Date" style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(m.date)}</td>
+                                                <td data-label="Counterparty">
                                                     <div style="font-weight: 500;">${m.merchant}</div>
                                                 </td>
-                                                <td><span class="tax-tag ${tagClass}">${m.taxTreatment}</span></td>
-                                                <td style="font-size: 12px; color: var(--text-secondary);">${m.taxNote}</td>
-                                                <td style="text-align: right; font-weight: 600; color: ${amountColor};">
+                                                <td data-label="Classification"><span class="tax-tag ${tagClass}">${m.taxTreatment}</span></td>
+                                                <td data-label="Regulatory" style="font-size: 12px; color: var(--text-secondary);">${m.taxNote}</td>
+                                                <td data-label="Principal Amount" style="text-align: right; font-weight: 600; color: ${amountColor};">
                                                     ${isOutflow ? '-' : '+'}${DataManager.formatCurrency(m.absAmount)}
                                                 </td>
                                             </tr>
@@ -732,7 +732,7 @@ const TaxManager = {
                             ` : ''}
                         </div>
 
-                        <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="tax-account-filter-wrap" style="display: flex; align-items: center; gap: 10px;">
                             <span class="text-secondary" style="font-size: 13px;">Account:</span>
                             <select id="tax-tx-account-filter">
                                 <option value="all"${selectedAccountId === 'all' ? ' selected' : ''}>All Accounts</option>
@@ -764,12 +764,12 @@ const TaxManager = {
                                     const acc = DataManager.getAccountById(t.accountId);
                                     return `
                                         <tr>
-                                            <td style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}</td>
-                                            <td><div style="font-weight: 500;">${t.merchant}</div></td>
-                                            <td><span class="tag bg-primary-light">${t.category}</span></td>
-                                            <td>${acc ? acc.name : 'Unknown'}</td>
-                                            <td><span class="tax-tag tax-tag-deductible">Allowable Deduction</span></td>
-                                            <td style="text-align: right; font-weight: 600; color: var(--danger);">
+                                            <td data-label="Date" style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}</td>
+                                            <td data-label="Payee"><div style="font-weight: 500;">${t.merchant}</div></td>
+                                            <td data-label="Category"><span class="tag bg-primary-light">${t.category}</span></td>
+                                            <td data-label="Account">${acc ? acc.name : 'Unknown'}</td>
+                                            <td data-label="Audit Status"><span class="tax-tag tax-tag-deductible">Allowable Deduction</span></td>
+                                            <td data-label="Amount" style="text-align: right; font-weight: 600; color: var(--danger);">
                                                 -${DataManager.formatCurrency(t.absAmount)}
                                             </td>
                                         </tr>
@@ -856,21 +856,23 @@ Views.tax = () => {
                     </button>
                 </div>
                 
-                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="tax-filter-controls" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     <div class="tax-date-inputs">
                         <span class="text-secondary" style="font-size: 13px;">From</span>
                         <input type="date" id="tax-start-date" value="${startDate}">
                         <span class="text-secondary" style="font-size: 13px;">To</span>
                         <input type="date" id="tax-end-date" value="${endDate}">
                     </div>
-                    <button class="btn btn-secondary" id="tax-export-btn" title="Download Tax Filing CSV">
-                        <span class="material-icons-round" style="font-size: 18px;">download</span>
-                        <span>Export CSV</span>
-                    </button>
-                    <button class="btn btn-secondary" id="tax-print-btn" title="Print Tax Summary">
-                        <span class="material-icons-round" style="font-size: 18px;">print</span>
-                        <span>Print</span>
-                    </button>
+                    <div class="tax-actions-row" style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn btn-secondary" id="tax-export-btn" title="Download Tax Filing CSV">
+                            <span class="material-icons-round" style="font-size: 18px;">download</span>
+                            <span>Export CSV</span>
+                        </button>
+                        <button class="btn btn-secondary" id="tax-print-btn" title="Print Tax Summary">
+                            <span class="material-icons-round" style="font-size: 18px;">print</span>
+                            <span>Print</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -954,12 +956,12 @@ Views.tax = () => {
                         const acc = DataManager.getAccountById(t.accountId);
                         return `
                             <tr>
-                                <td style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}</td>
-                                <td><div style="font-weight: 500;">${t.merchant}</div></td>
-                                <td><span class="tag bg-primary-light">${t.category}</span></td>
-                                <td>${acc ? acc.name : 'Unknown'}</td>
-                                <td><span class="tax-tag tax-tag-deductible">Allowable Deduction</span></td>
-                                <td style="text-align: right; font-weight: 600; color: var(--danger);">
+                                <td data-label="Date" style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}</td>
+                                <td data-label="Payee"><div style="font-weight: 500;">${t.merchant}</div></td>
+                                <td data-label="Category"><span class="tag bg-primary-light">${t.category}</span></td>
+                                <td data-label="Account">${acc ? acc.name : 'Unknown'}</td>
+                                <td data-label="Audit Status"><span class="tax-tag tax-tag-deductible">Allowable Deduction</span></td>
+                                <td data-label="Amount" style="text-align: right; font-weight: 600; color: var(--danger);">
                                     -${DataManager.formatCurrency(t.absAmount)}
                                 </td>
                             </tr>
@@ -1013,6 +1015,7 @@ Views.tax = () => {
                     ];
 
                     const ctx = chartCanvas.getContext('2d');
+                    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
                     _taxChartInstance = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
@@ -1029,12 +1032,12 @@ Views.tax = () => {
                             maintainAspectRatio: false,
                             plugins: {
                                 legend: {
-                                    position: 'right',
+                                    position: isMobile ? 'bottom' : 'right',
                                     labels: {
                                         color: '#94a3b8',
-                                        font: { family: 'Outfit', size: 11 },
-                                        boxWidth: 12,
-                                        padding: 10
+                                        font: { family: 'Outfit', size: isMobile ? 10 : 11 },
+                                        boxWidth: isMobile ? 10 : 12,
+                                        padding: isMobile ? 6 : 10
                                     }
                                 },
                                 tooltip: {
