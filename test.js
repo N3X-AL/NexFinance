@@ -156,8 +156,10 @@ console.log("✔ Settled loans list descending order test passed!");
     const layoutCss = fs.readFileSync('./css/layout.css', 'utf8');
     assert(layoutCss.includes('.col-span-7 { grid-column: span 7; }'), "layout.css must define .col-span-7");
     assert(layoutCss.includes('.col-span-5 { grid-column: span 5; }'), "layout.css must define .col-span-5");
-    assert(cssContent.includes('.tax-presets {\n        overflow-x: auto;') || cssContent.includes('overflow-x: auto;'), "components.css must include mobile scrolling for tax-presets");
-    assert(cssContent.includes('.tax-type-toggle {\n        width: 100%;') || cssContent.includes('width: 100%;'), "components.css must include mobile full-width for tax-type-toggle");
+    assert(layoutCss.includes('overflow-x: hidden;'), "layout.css must prevent horizontal overflow on main content");
+    assert(cssContent.includes('.tax-presets') && cssContent.includes('overflow-x: auto;'), "components.css must include mobile scrolling for tax-presets");
+    assert(cssContent.includes('.tax-date-field'), "components.css must include .tax-date-field styling");
+    assert(cssContent.includes('#tax-page-container'), "components.css must include #tax-page-container constraints");
     console.log("✔ Tax view mobile CSS definitions test passed!");
 
     console.log("All tests passed successfully!");
