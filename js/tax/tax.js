@@ -402,7 +402,7 @@ const TaxManager = {
                                 <span class="material-icons-round">receipt</span>
                             </div>
                         </div>
-                        <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--danger);">
+                        <div class="stat-value" style="color: var(--danger);">
                             ${DataManager.formatCurrency(currentReport.totalExpenses)}
                         </div>
                         <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
@@ -421,7 +421,7 @@ const TaxManager = {
                                 <span class="material-icons-round">arrow_upward</span>
                             </div>
                         </div>
-                        <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--warning);">
+                        <div class="stat-value" style="color: var(--warning);">
                             ${DataManager.formatCurrency(currentReport.totalLoansGiven)}
                         </div>
                         <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
@@ -440,7 +440,7 @@ const TaxManager = {
                                 <span class="material-icons-round">arrow_downward</span>
                             </div>
                         </div>
-                        <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--accent);">
+                        <div class="stat-value" style="color: var(--accent);">
                             ${DataManager.formatCurrency(currentReport.totalLoansReceived + currentReport.totalLoanRecoveries)}
                         </div>
                         <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
@@ -459,7 +459,7 @@ const TaxManager = {
                                 <span class="material-icons-round">balance</span>
                             </div>
                         </div>
-                        <div class="stat-value" style="margin: 14px 0 8px 0; font-size: 22px;">
+                        <div class="stat-value" style="font-size: 22px;">
                             ${DataManager.formatCurrency(currentReport.totalCashOutflow)}
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
