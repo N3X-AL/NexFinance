@@ -130,6 +130,15 @@ const DataManager = {
         if (CloudSync.isConfigured() && CloudSync.getGistId()) {
             const remoteData = await CloudSync.pullFromGist();
             if (remoteData) {
+                // Prevent duplicate render if remote data has no changes compared to local data
+                try {
+                    if (JSON.stringify(appData) === JSON.stringify(remoteData)) {
+                        return false;
+                    }
+                } catch (e) {
+                    // Continue to sync if comparison fails
+                }
+
                 // Clear and overwrite appData keys
                 Object.keys(appData).forEach(k => delete appData[k]);
                 Object.assign(appData, remoteData);

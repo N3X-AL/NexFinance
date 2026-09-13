@@ -383,6 +383,406 @@ const TaxManager = {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    },
+
+    renderTaxDashboardHTML: (currentReport, taxpayerType = 'salaried', incomeOverride = null, selectedCategory = 'all', selectedAccountId = 'all', searchQuery = '', isExpensesAuditCollapsed = false, isLoanAuditCollapsed = false) => {
+        // Compute Tax Liability
+        const effectiveIncome = incomeOverride !== null ? incomeOverride : currentReport.totalIncome;
+        const taxEst = TaxManager.calculatePakistanTaxLiability(effectiveIncome, taxpayerType);
+
+        // Top Metrics HTML
+        const metricsHTML = `
+            <div class="dashboard-grid" style="margin-bottom: 24px;">
+                <!-- Total Allowable Expenses -->
+                <div class="col-span-3 animate-slide-up" style="animation-delay: 0.1s;">
+                    <div class="card stat-card" style="height: 100%;">
+                        <div class="card-header" style="margin-bottom: 0;">
+                            <h3 class="card-title text-secondary">Allowable Expenses</h3>
+                            <div class="stat-icon bg-danger-light text-danger">
+                                <span class="material-icons-round">receipt</span>
+                            </div>
+                        </div>
+                        <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--danger);">
+                            ${DataManager.formatCurrency(currentReport.totalExpenses)}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                            <span class="tax-tag tax-tag-deductible">Tax Deductible</span>
+                            <span>${currentReport.deductibleExpenses.length} verified outlays</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Capital Lent (Loans Given) -->
+                <div class="col-span-3 animate-slide-up" style="animation-delay: 0.15s;">
+                    <div class="card stat-card" style="height: 100%;">
+                        <div class="card-header" style="margin-bottom: 0;">
+                            <h3 class="card-title text-secondary">Capital Lent (Debtors)</h3>
+                            <div class="stat-icon bg-warning-light text-warning">
+                                <span class="material-icons-round">arrow_upward</span>
+                            </div>
+                        </div>
+                        <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--warning);">
+                            ${DataManager.formatCurrency(currentReport.totalLoansGiven)}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                            <span class="tax-tag tax-tag-capital-asset">Balance Sheet Asset</span>
+                            <span>Excluded from expenses</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Capital Inflows (Borrowed & Recoveries) -->
+                <div class="col-span-3 animate-slide-up" style="animation-delay: 0.2s;">
+                    <div class="card stat-card" style="height: 100%;">
+                        <div class="card-header" style="margin-bottom: 0;">
+                            <h3 class="card-title text-secondary">Capital Inflows</h3>
+                            <div class="stat-icon bg-accent-light text-accent">
+                                <span class="material-icons-round">arrow_downward</span>
+                            </div>
+                        </div>
+                        <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--accent);">
+                            ${DataManager.formatCurrency(currentReport.totalLoansReceived + currentReport.totalLoanRecoveries)}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                            <span class="tax-tag tax-tag-liability">Capital Movement</span>
+                            <span>Non-taxable principal</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Anti-Falsification Reconciliation -->
+                <div class="col-span-3 animate-slide-up" style="animation-delay: 0.25s;">
+                    <div class="card stat-card" style="height: 100%;">
+                        <div class="card-header" style="margin-bottom: 0;">
+                            <h3 class="card-title text-secondary">Anti-Falsification Audit</h3>
+                            <div class="stat-icon bg-primary-light text-primary">
+                                <span class="material-icons-round">balance</span>
+                            </div>
+                        </div>
+                        <div class="stat-value" style="margin: 14px 0 8px 0; font-size: 22px;">
+                            ${DataManager.formatCurrency(currentReport.totalCashOutflow)}
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                            Total Cash Outflow · <strong>${DataManager.formatCurrency(currentReport.totalExcludedOutflows)}</strong> quarantined capital loans
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Pakistan Tax Slab Estimator HTML
+        const taxSlabHTML = `
+            <div class="card tax-slab-card animate-slide-up" style="margin-bottom: 24px; animation-delay: 0.28s;">
+                <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <h3 class="card-title">Pakistan Income Tax Slab Estimator</h3>
+                            <span class="tax-tag tax-tag-deductible">Finance Act Statutory Slabs</span>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                            Estimated annual tax liability and monthly payroll withholding based on declared gross revenue/salary.
+                        </p>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div class="tax-type-toggle">
+                            <button class="tax-type-btn ${taxpayerType === 'salaried' ? 'active' : ''}" id="tax-toggle-salaried" data-type="salaried">
+                                Salaried Individual
+                            </button>
+                            <button class="tax-type-btn ${taxpayerType === 'business' ? 'active' : ''}" id="tax-toggle-business" data-type="business">
+                                Business / Non-Salaried
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Taxable Base & Slab Overview -->
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 12px 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <span style="font-size: 13px; font-weight: 500;">Taxable Income Base:</span>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <input type="number" id="tax-income-input" value="${taxEst.taxableIncome}" style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 5px 10px; font-size: 14px; font-weight: 600; width: 140px;" min="0">
+                            <button class="btn btn-secondary" id="tax-income-reset-btn" style="padding: 4px 8px; font-size: 11px;" title="Reset to actual period income">
+                                <span class="material-icons-round" style="font-size: 14px;">sync</span> Actual
+                            </button>
+                        </div>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">
+                        Current Bracket: <strong id="tax-slab-bracket-val" style="color: var(--primary);">${taxEst.currentSlab}</strong>
+                    </div>
+                </div>
+
+                <!-- Slab Metric Grid -->
+                <div class="tax-slab-grid">
+                    <div class="tax-slab-metric-box">
+                        <span class="tax-slab-metric-label">Estimated Annual Tax</span>
+                        <span class="tax-slab-metric-val" id="tax-slab-annual-val" style="color: var(--danger);">${DataManager.formatCurrency(taxEst.annualTax)}</span>
+                        <span class="tax-slab-metric-sub">Full year estimated liability</span>
+                    </div>
+
+                    <div class="tax-slab-metric-box">
+                        <span class="tax-slab-metric-label">Monthly Withholding</span>
+                        <span class="tax-slab-metric-val" id="tax-slab-monthly-val" style="color: var(--warning);">${DataManager.formatCurrency(taxEst.monthlyTax)}</span>
+                        <span class="tax-slab-metric-sub">Average deduction per month</span>
+                    </div>
+
+                    <div class="tax-slab-metric-box">
+                        <span class="tax-slab-metric-label">Effective Tax Rate</span>
+                        <span class="tax-slab-metric-val" id="tax-slab-rate-val" style="color: var(--accent);">${taxEst.effectiveRate.toFixed(1)}%</span>
+                        <span class="tax-slab-metric-sub" id="tax-slab-marginal-val">Marginal bracket: ${taxEst.marginalRate}%</span>
+                    </div>
+
+                    <div class="tax-slab-metric-box">
+                        <span class="tax-slab-metric-label">Net Post-Tax Income</span>
+                        <span class="tax-slab-metric-val" id="tax-slab-takehome-val" style="color: var(--success);">${DataManager.formatCurrency(taxEst.netTakeHome)}</span>
+                        <span class="tax-slab-metric-sub">Estimated disposable income</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Category Breakdown Section
+        const hasExpenses = currentReport.totalExpenses > 0;
+        const categoryBreakdownHTML = `
+            <div class="dashboard-grid" style="margin-bottom: 24px;">
+                <!-- Left: Category Chart -->
+                <div class="col-span-5 animate-slide-up" style="animation-delay: 0.3s;">
+                    <div class="card" style="height: 100%; display: flex; flex-direction: column;">
+                        <div class="card-header">
+                            <div>
+                                <h3 class="card-title">Expense Distribution</h3>
+                                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                                    Category-wise allocation of allowable expenses
+                                </p>
+                            </div>
+                            <span class="tax-tag tax-tag-deductible">${currentReport.categories.length} Categories</span>
+                        </div>
+                        
+                        <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 240px; position: relative;">
+                            ${hasExpenses ? `
+                                <canvas id="tax-category-chart" style="max-height: 240px;"></canvas>
+                            ` : Components.emptyState('pie_chart', 'No expenses recorded', 'No deductible expenses found in the selected time frame.')}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: "What Went Where" Detailed Breakdown List -->
+                <div class="col-span-7 animate-slide-up" style="animation-delay: 0.35s;">
+                    <div class="card" style="height: 100%;">
+                        <div class="card-header">
+                            <div>
+                                <h3 class="card-title">What Went Where (Category Breakdown)</h3>
+                                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                                    Click any category to filter the itemized transaction audit below
+                                </p>
+                            </div>
+                            ${selectedCategory !== 'all' ? `
+                                <button class="btn btn-secondary" id="tax-clear-cat-filter" style="padding: 4px 10px; font-size: 12px;">
+                                    <span class="material-icons-round" style="font-size: 14px;">close</span> Clear Category
+                                </button>
+                            ` : ''}
+                        </div>
+
+                        <div style="max-height: 280px; overflow-y: auto; padding-right: 4px;">
+                            ${hasExpenses ? currentReport.categories.map(c => {
+                                const isSelected = selectedCategory === c.category;
+                                return `
+                                    <div class="tax-breakdown-item ${isSelected ? 'selected' : ''}" data-cat="${encodeURIComponent(c.category)}">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span class="material-icons-round" style="font-size: 18px; color: var(--primary);">category</span>
+                                                <span style="font-weight: 500; font-size: 14px;">${c.category}</span>
+                                                <span style="font-size: 11px; color: var(--text-muted);">(${c.count} txs)</span>
+                                            </div>
+                                            <div style="text-align: right;">
+                                                <span style="font-weight: 600; font-size: 14px;">${DataManager.formatCurrency(c.amount)}</span>
+                                                <span style="font-size: 12px; color: var(--text-secondary); margin-left: 6px;">${c.percentage.toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                        <div class="progress-container" style="height: 6px; background: rgba(255,255,255,0.06);">
+                                            <div class="progress-bar" style="width: ${c.percentage}%; background: var(--primary);"></div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('') : Components.emptyState('receipt_long', 'No expenses found', 'Adjust your dates to view breakdown.')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Loan Capital Movements & Anti-Falsification Section
+        const hasLoans = currentReport.loanCapitalMovements.length > 0;
+        const loanReconciliationHTML = `
+            <div class="card animate-slide-up" style="margin-bottom: 24px; animation-delay: 0.4s;">
+                <div class="card-header card-header-collapsible" id="tax-loan-audit-header" style="margin-bottom: 0;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <h3 class="card-title">Loan Capital Reconciliation (Assets & Liabilities Audit)</h3>
+                            <span class="tax-tag tax-tag-capital-asset">Balance Sheet Quarantined</span>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                            Strict segregation of friendly loans to protect Wealth Statement (Form 114) integrity and prevent tax falsification.
+                        </p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span class="text-secondary" style="font-size: 12px;">${currentReport.loanCapitalMovements.length} records</span>
+                        <div class="icon-btn" style="width: 32px; height: 32px; border: none; background: var(--bg-surface-hover); pointer-events: none;">
+                            <span class="material-icons-round" id="tax-loan-chevron">${isLoanAuditCollapsed ? 'expand_more' : 'expand_less'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tax-loan-audit-body" style="display: ${isLoanAuditCollapsed ? 'none' : 'block'}; margin-top: 16px;">
+                    ${hasLoans ? `
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Counterparty / Description</th>
+                                        <th>Tax Classification</th>
+                                        <th>Regulatory Treatment</th>
+                                        <th style="text-align: right;">Principal Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${currentReport.loanCapitalMovements.map(m => {
+                                        let tagClass = 'tax-tag-discharge';
+                                        if (m.taxTreatment.includes('Asset')) tagClass = 'tax-tag-capital-asset';
+                                        else if (m.taxTreatment.includes('Liability')) tagClass = 'tax-tag-liability';
+                                        else if (m.taxTreatment.includes('Recovery')) tagClass = 'tax-tag-recovery';
+
+                                        const isOutflow = m.amount < 0;
+                                        const amountColor = isOutflow ? 'var(--warning)' : 'var(--accent)';
+
+                                        return `
+                                            <tr>
+                                                <td style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(m.date)}</td>
+                                                <td>
+                                                    <div style="font-weight: 500;">${m.merchant}</div>
+                                                </td>
+                                                <td><span class="tax-tag ${tagClass}">${m.taxTreatment}</span></td>
+                                                <td style="font-size: 12px; color: var(--text-secondary);">${m.taxNote}</td>
+                                                <td style="text-align: right; font-weight: 600; color: ${amountColor};">
+                                                    ${isOutflow ? '-' : '+'}${DataManager.formatCurrency(m.absAmount)}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : `
+                        <div style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 13px;">
+                            <span class="material-icons-round" style="font-size: 28px; color: var(--text-muted); display: block; margin-bottom: 8px;">check_circle_outline</span>
+                            No loan disbursements, borrowings, or settlement transactions occurred within this time frame.
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+
+        // Detailed Itemized Transaction Audit Log
+        const allAccounts = appData.accounts || [];
+        let filteredExpenses = currentReport.deductibleExpenses;
+        if (selectedCategory !== 'all') {
+            filteredExpenses = filteredExpenses.filter(e => e.category === selectedCategory);
+        }
+        if (selectedAccountId !== 'all') {
+            const accId = parseInt(selectedAccountId);
+            filteredExpenses = filteredExpenses.filter(e => e.accountId === accId);
+        }
+        if (searchQuery.trim() !== '') {
+            const q = searchQuery.trim().toLowerCase();
+            filteredExpenses = filteredExpenses.filter(e => 
+                (e.merchant || '').toLowerCase().includes(q) ||
+                (e.category || '').toLowerCase().includes(q)
+            );
+        }
+        const hasActiveFilters = selectedCategory !== 'all' || selectedAccountId !== 'all' || searchQuery.trim() !== '';
+
+        const transactionAuditHTML = `
+            <div class="card animate-slide-up" style="animation-delay: 0.45s;">
+                <div class="card-header card-header-collapsible" id="tax-expenses-audit-header" style="margin-bottom: 0;">
+                    <div>
+                        <h3 class="card-title">Itemized Allowable Expenses Audit</h3>
+                        <p id="tax-audit-count-label" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                            Showing <strong>${filteredExpenses.length}</strong> of ${currentReport.deductibleExpenses.length} deductible transactions
+                        </p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn btn-secondary" id="tax-reset-table-filters" style="display: ${hasActiveFilters ? 'inline-flex' : 'none'}; padding: 4px 10px; font-size: 12px;">
+                            <span class="material-icons-round" style="font-size: 14px;">filter_alt_off</span> Reset Filters
+                        </button>
+                        <div class="icon-btn" style="width: 32px; height: 32px; border: none; background: var(--bg-surface-hover); pointer-events: none;">
+                            <span class="material-icons-round" id="tax-expenses-chevron">${isExpensesAuditCollapsed ? 'expand_more' : 'expand_less'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tax-expenses-audit-body" style="display: ${isExpensesAuditCollapsed ? 'none' : 'block'}; margin-top: 16px;">
+                    <!-- Search & Account Filters -->
+                    <div class="tax-table-toolbar">
+                        <div class="tax-search-box">
+                            <span class="material-icons-round" style="font-size: 18px; color: var(--text-secondary);">search</span>
+                            <input type="text" id="tax-tx-search" placeholder="Search payee, merchant, category..." value="${searchQuery}">
+                            ${searchQuery ? `
+                                <span class="material-icons-round" id="tax-tx-search-clear" style="font-size: 16px; color: var(--text-secondary); cursor: pointer;">close</span>
+                            ` : ''}
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span class="text-secondary" style="font-size: 13px;">Account:</span>
+                            <select id="tax-tx-account-filter">
+                                <option value="all"${selectedAccountId === 'all' ? ' selected' : ''}>All Accounts</option>
+                                ${allAccounts.map(a => `
+                                    <option value="${a.id}"${selectedAccountId === String(a.id) ? ' selected' : ''}>${a.name}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="tax-audit-empty-state" style="display: ${filteredExpenses.length === 0 ? 'block' : 'none'};">
+                        ${Components.emptyState('receipt_long', 'No matching transactions', 'No allowable expenses match the selected search and filter criteria.')}
+                    </div>
+
+                    <div class="table-container" id="tax-audit-table-container" style="display: ${filteredExpenses.length > 0 ? 'block' : 'none'};">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Payee / Description</th>
+                                    <th>Category</th>
+                                    <th>Account</th>
+                                    <th>Audit Status</th>
+                                    <th style="text-align: right;">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tax-audit-table-tbody">
+                                ${filteredExpenses.map(t => {
+                                    const acc = DataManager.getAccountById(t.accountId);
+                                    return `
+                                        <tr>
+                                            <td style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}</td>
+                                            <td><div style="font-weight: 500;">${t.merchant}</div></td>
+                                            <td><span class="tag bg-primary-light">${t.category}</span></td>
+                                            <td>${acc ? acc.name : 'Unknown'}</td>
+                                            <td><span class="tax-tag tax-tag-deductible">Allowable Deduction</span></td>
+                                            <td style="text-align: right; font-weight: 600; color: var(--danger);">
+                                                -${DataManager.formatCurrency(t.absAmount)}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        return metricsHTML + taxSlabHTML + categoryBreakdownHTML + loanReconciliationHTML + transactionAuditHTML;
     }
 };
 
@@ -406,6 +806,19 @@ Views.tax = () => {
     let incomeOverride = null; // null = use currentReport.totalIncome
     let isExpensesAuditCollapsed = false;
     let isLoanAuditCollapsed = false;
+
+    // Generate initial dashboard content synchronously so view renders immediately without flashing
+    const initialReport = TaxManager.getTaxReportData(startDate, endDate);
+    const initialContentHTML = TaxManager.renderTaxDashboardHTML(
+        initialReport,
+        taxpayerType,
+        incomeOverride,
+        selectedCategory,
+        selectedAccountId,
+        searchQuery,
+        isExpensesAuditCollapsed,
+        isLoanAuditCollapsed
+    );
 
     // Return the HTML layout
     const html = `
@@ -463,14 +876,14 @@ Views.tax = () => {
 
             <!-- Dynamic Tax Content Area -->
             <div id="tax-dynamic-content">
-                <!-- Injected via renderTaxDashboard() -->
+                ${initialContentHTML}
             </div>
         </div>
     `;
 
     // Defer initialization to attach events & chart
     setTimeout(() => {
-        if (typeof document === 'undefined') return;
+        if (typeof document === 'undefined' || !document.getElementById) return;
         const container = document.getElementById('tax-page-container');
         if (!container) return;
 
@@ -556,396 +969,26 @@ Views.tax = () => {
             }
         };
 
-        const renderTaxDashboard = () => {
+        const renderTaxDashboard = (skipHTML = false) => {
             const dynamicArea = document.getElementById('tax-dynamic-content');
             if (!dynamicArea) return;
 
             currentReport = TaxManager.getTaxReportData(startDate, endDate);
 
-            // Compute Tax Liability
-            const effectiveIncome = incomeOverride !== null ? incomeOverride : currentReport.totalIncome;
-            const taxEst = TaxManager.calculatePakistanTaxLiability(effectiveIncome, taxpayerType);
+            if (!skipHTML) {
+                dynamicArea.innerHTML = TaxManager.renderTaxDashboardHTML(
+                    currentReport,
+                    taxpayerType,
+                    incomeOverride,
+                    selectedCategory,
+                    selectedAccountId,
+                    searchQuery,
+                    isExpensesAuditCollapsed,
+                    isLoanAuditCollapsed
+                );
+            }
 
-            // Top Metrics HTML
-            const metricsHTML = `
-                <div class="dashboard-grid" style="margin-bottom: 24px;">
-                    <!-- Total Allowable Expenses -->
-                    <div class="col-span-3 animate-slide-up" style="animation-delay: 0.1s;">
-                        <div class="card stat-card" style="height: 100%;">
-                            <div class="card-header" style="margin-bottom: 0;">
-                                <h3 class="card-title text-secondary">Allowable Expenses</h3>
-                                <div class="stat-icon bg-danger-light text-danger">
-                                    <span class="material-icons-round">receipt</span>
-                                </div>
-                            </div>
-                            <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--danger);">
-                                ${DataManager.formatCurrency(currentReport.totalExpenses)}
-                            </div>
-                            <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
-                                <span class="tax-tag tax-tag-deductible">Tax Deductible</span>
-                                <span>${currentReport.deductibleExpenses.length} verified outlays</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Capital Lent (Loans Given) -->
-                    <div class="col-span-3 animate-slide-up" style="animation-delay: 0.15s;">
-                        <div class="card stat-card" style="height: 100%;">
-                            <div class="card-header" style="margin-bottom: 0;">
-                                <h3 class="card-title text-secondary">Capital Lent (Debtors)</h3>
-                                <div class="stat-icon bg-warning-light text-warning">
-                                    <span class="material-icons-round">arrow_upward</span>
-                                </div>
-                            </div>
-                            <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--warning);">
-                                ${DataManager.formatCurrency(currentReport.totalLoansGiven)}
-                            </div>
-                            <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
-                                <span class="tax-tag tax-tag-capital-asset">Balance Sheet Asset</span>
-                                <span>Excluded from expenses</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Capital Inflows (Borrowed & Recoveries) -->
-                    <div class="col-span-3 animate-slide-up" style="animation-delay: 0.2s;">
-                        <div class="card stat-card" style="height: 100%;">
-                            <div class="card-header" style="margin-bottom: 0;">
-                                <h3 class="card-title text-secondary">Capital Inflows</h3>
-                                <div class="stat-icon bg-accent-light text-accent">
-                                    <span class="material-icons-round">arrow_downward</span>
-                                </div>
-                            </div>
-                            <div class="stat-value" style="margin: 14px 0 8px 0; color: var(--accent);">
-                                ${DataManager.formatCurrency(currentReport.totalLoansReceived + currentReport.totalLoanRecoveries)}
-                            </div>
-                            <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
-                                <span class="tax-tag tax-tag-liability">Capital Movement</span>
-                                <span>Non-taxable principal</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Anti-Falsification Reconciliation -->
-                    <div class="col-span-3 animate-slide-up" style="animation-delay: 0.25s;">
-                        <div class="card stat-card" style="height: 100%;">
-                            <div class="card-header" style="margin-bottom: 0;">
-                                <h3 class="card-title text-secondary">Anti-Falsification Audit</h3>
-                                <div class="stat-icon bg-primary-light text-primary">
-                                    <span class="material-icons-round">balance</span>
-                                </div>
-                            </div>
-                            <div class="stat-value" style="margin: 14px 0 8px 0; font-size: 22px;">
-                                ${DataManager.formatCurrency(currentReport.totalCashOutflow)}
-                            </div>
-                            <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
-                                Total Cash Outflow · <strong>${DataManager.formatCurrency(currentReport.totalExcludedOutflows)}</strong> quarantined capital loans
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Pakistan Tax Slab Estimator HTML (Feature 4)
-            const taxSlabHTML = `
-                <div class="card tax-slab-card animate-slide-up" style="margin-bottom: 24px; animation-delay: 0.28s;">
-                    <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <h3 class="card-title">Pakistan Income Tax Slab Estimator</h3>
-                                <span class="tax-tag tax-tag-deductible">Finance Act Statutory Slabs</span>
-                            </div>
-                            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                                Estimated annual tax liability and monthly payroll withholding based on declared gross revenue/salary.
-                            </p>
-                        </div>
-                        
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <div class="tax-type-toggle">
-                                <button class="tax-type-btn ${taxpayerType === 'salaried' ? 'active' : ''}" id="tax-toggle-salaried" data-type="salaried">
-                                    Salaried Individual
-                                </button>
-                                <button class="tax-type-btn ${taxpayerType === 'business' ? 'active' : ''}" id="tax-toggle-business" data-type="business">
-                                    Business / Non-Salaried
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Taxable Base & Slab Overview -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 12px 16px;">
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                            <span style="font-size: 13px; font-weight: 500;">Taxable Income Base:</span>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <input type="number" id="tax-income-input" value="${taxEst.taxableIncome}" style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 5px 10px; font-size: 14px; font-weight: 600; width: 140px;" min="0">
-                                <button class="btn btn-secondary" id="tax-income-reset-btn" style="padding: 4px 8px; font-size: 11px;" title="Reset to actual period income">
-                                    <span class="material-icons-round" style="font-size: 14px;">sync</span> Actual
-                                </button>
-                            </div>
-                        </div>
-                        <div style="font-size: 13px; color: var(--text-secondary);">
-                            Current Bracket: <strong id="tax-slab-bracket-val" style="color: var(--primary);">${taxEst.currentSlab}</strong>
-                        </div>
-                    </div>
-
-                    <!-- Slab Metric Grid -->
-                    <div class="tax-slab-grid">
-                        <div class="tax-slab-metric-box">
-                            <span class="tax-slab-metric-label">Estimated Annual Tax</span>
-                            <span class="tax-slab-metric-val" id="tax-slab-annual-val" style="color: var(--danger);">${DataManager.formatCurrency(taxEst.annualTax)}</span>
-                            <span class="tax-slab-metric-sub">Full year estimated liability</span>
-                        </div>
-
-                        <div class="tax-slab-metric-box">
-                            <span class="tax-slab-metric-label">Monthly Withholding</span>
-                            <span class="tax-slab-metric-val" id="tax-slab-monthly-val" style="color: var(--warning);">${DataManager.formatCurrency(taxEst.monthlyTax)}</span>
-                            <span class="tax-slab-metric-sub">Average deduction per month</span>
-                        </div>
-
-                        <div class="tax-slab-metric-box">
-                            <span class="tax-slab-metric-label">Effective Tax Rate</span>
-                            <span class="tax-slab-metric-val" id="tax-slab-rate-val" style="color: var(--accent);">${taxEst.effectiveRate.toFixed(1)}%</span>
-                            <span class="tax-slab-metric-sub" id="tax-slab-marginal-val">Marginal bracket: ${taxEst.marginalRate}%</span>
-                        </div>
-
-                        <div class="tax-slab-metric-box">
-                            <span class="tax-slab-metric-label">Net Post-Tax Income</span>
-                            <span class="tax-slab-metric-val" id="tax-slab-takehome-val" style="color: var(--success);">${DataManager.formatCurrency(taxEst.netTakeHome)}</span>
-                            <span class="tax-slab-metric-sub">Estimated disposable income</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Category Breakdown Section ("What went where")
             const hasExpenses = currentReport.totalExpenses > 0;
-            const categoryBreakdownHTML = `
-                <div class="dashboard-grid" style="margin-bottom: 24px;">
-                    <!-- Left: Category Chart -->
-                    <div class="col-span-5 animate-slide-up" style="animation-delay: 0.3s;">
-                        <div class="card" style="height: 100%; display: flex; flex-direction: column;">
-                            <div class="card-header">
-                                <div>
-                                    <h3 class="card-title">Expense Distribution</h3>
-                                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                                        Category-wise allocation of allowable expenses
-                                    </p>
-                                </div>
-                                <span class="tax-tag tax-tag-deductible">${currentReport.categories.length} Categories</span>
-                            </div>
-                            
-                            <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 240px; position: relative;">
-                                ${hasExpenses ? `
-                                    <canvas id="tax-category-chart" style="max-height: 240px;"></canvas>
-                                ` : Components.emptyState('pie_chart', 'No expenses recorded', 'No deductible expenses found in the selected time frame.')}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right: "What Went Where" Detailed Breakdown List -->
-                    <div class="col-span-7 animate-slide-up" style="animation-delay: 0.35s;">
-                        <div class="card" style="height: 100%;">
-                            <div class="card-header">
-                                <div>
-                                    <h3 class="card-title">What Went Where (Category Breakdown)</h3>
-                                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                                        Click any category to filter the itemized transaction audit below
-                                    </p>
-                                </div>
-                                ${selectedCategory !== 'all' ? `
-                                    <button class="btn btn-secondary" id="tax-clear-cat-filter" style="padding: 4px 10px; font-size: 12px;">
-                                        <span class="material-icons-round" style="font-size: 14px;">close</span> Clear Category
-                                    </button>
-                                ` : ''}
-                            </div>
-
-                            <div style="max-height: 280px; overflow-y: auto; padding-right: 4px;">
-                                ${hasExpenses ? currentReport.categories.map(c => {
-                                    const isSelected = selectedCategory === c.category;
-                                    return `
-                                        <div class="tax-breakdown-item ${isSelected ? 'selected' : ''}" data-cat="${encodeURIComponent(c.category)}">
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                                <div style="display: flex; align-items: center; gap: 8px;">
-                                                    <span class="material-icons-round" style="font-size: 18px; color: var(--primary);">category</span>
-                                                    <span style="font-weight: 500; font-size: 14px;">${c.category}</span>
-                                                    <span style="font-size: 11px; color: var(--text-muted);">(${c.count} txs)</span>
-                                                </div>
-                                                <div style="text-align: right;">
-                                                    <span style="font-weight: 600; font-size: 14px;">${DataManager.formatCurrency(c.amount)}</span>
-                                                    <span style="font-size: 12px; color: var(--text-secondary); margin-left: 6px;">${c.percentage.toFixed(1)}%</span>
-                                                </div>
-                                            </div>
-                                            <div class="progress-container" style="height: 6px; background: rgba(255,255,255,0.06);">
-                                                <div class="progress-bar" style="width: ${c.percentage}%; background: var(--primary);"></div>
-                                            </div>
-                                        </div>
-                                    `;
-                                }).join('') : Components.emptyState('receipt_long', 'No expenses found', 'Adjust your dates to view breakdown.')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Loan Capital Movements & Anti-Falsification Section
-            const hasLoans = currentReport.loanCapitalMovements.length > 0;
-            const loanReconciliationHTML = `
-                <div class="card animate-slide-up" style="margin-bottom: 24px; animation-delay: 0.4s;">
-                    <div class="card-header card-header-collapsible" id="tax-loan-audit-header" style="margin-bottom: 0;">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <h3 class="card-title">Loan Capital Reconciliation (Assets & Liabilities Audit)</h3>
-                                <span class="tax-tag tax-tag-capital-asset">Balance Sheet Quarantined</span>
-                            </div>
-                            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                                Strict segregation of friendly loans to protect Wealth Statement (Form 114) integrity and prevent tax falsification.
-                            </p>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span class="text-secondary" style="font-size: 12px;">${currentReport.loanCapitalMovements.length} records</span>
-                            <div class="icon-btn" style="width: 32px; height: 32px; border: none; background: var(--bg-surface-hover); pointer-events: none;">
-                                <span class="material-icons-round" id="tax-loan-chevron">${isLoanAuditCollapsed ? 'expand_more' : 'expand_less'}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="tax-loan-audit-body" style="display: ${isLoanAuditCollapsed ? 'none' : 'block'}; margin-top: 16px;">
-                        ${hasLoans ? `
-                            <div class="table-container">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Counterparty / Description</th>
-                                            <th>Tax Classification</th>
-                                            <th>Regulatory Treatment</th>
-                                            <th style="text-align: right;">Principal Amount</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${currentReport.loanCapitalMovements.map(m => {
-                                            let tagClass = 'tax-tag-discharge';
-                                            if (m.taxTreatment.includes('Asset')) tagClass = 'tax-tag-capital-asset';
-                                            else if (m.taxTreatment.includes('Liability')) tagClass = 'tax-tag-liability';
-                                            else if (m.taxTreatment.includes('Recovery')) tagClass = 'tax-tag-recovery';
-
-                                            const isOutflow = m.amount < 0;
-                                            const amountColor = isOutflow ? 'var(--warning)' : 'var(--accent)';
-
-                                            return `
-                                                <tr>
-                                                    <td style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(m.date)}</td>
-                                                    <td>
-                                                        <div style="font-weight: 500;">${m.merchant}</div>
-                                                    </td>
-                                                    <td><span class="tax-tag ${tagClass}">${m.taxTreatment}</span></td>
-                                                    <td style="font-size: 12px; color: var(--text-secondary);">${m.taxNote}</td>
-                                                    <td style="text-align: right; font-weight: 600; color: ${amountColor};">
-                                                        ${isOutflow ? '-' : '+'}${DataManager.formatCurrency(m.absAmount)}
-                                                    </td>
-                                                </tr>
-                                            `;
-                                        }).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ` : `
-                            <div style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 13px;">
-                                <span class="material-icons-round" style="font-size: 28px; color: var(--text-muted); display: block; margin-bottom: 8px;">check_circle_outline</span>
-                                No loan disbursements, borrowings, or settlement transactions occurred within this time frame.
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `;
-
-            // Detailed Itemized Transaction Audit Log (with Feature 6: Search & Account Filter)
-            const allAccounts = appData.accounts || [];
-            const filteredExpenses = getFilteredExpenses();
-            const hasActiveFilters = selectedCategory !== 'all' || selectedAccountId !== 'all' || searchQuery.trim() !== '';
-
-            const transactionAuditHTML = `
-                <div class="card animate-slide-up" style="animation-delay: 0.45s;">
-                    <div class="card-header card-header-collapsible" id="tax-expenses-audit-header" style="margin-bottom: 0;">
-                        <div>
-                            <h3 class="card-title">Itemized Allowable Expenses Audit</h3>
-                            <p id="tax-audit-count-label" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                                Showing <strong>${filteredExpenses.length}</strong> of ${currentReport.deductibleExpenses.length} deductible transactions
-                            </p>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <button class="btn btn-secondary" id="tax-reset-table-filters" style="display: ${hasActiveFilters ? 'inline-flex' : 'none'}; padding: 4px 10px; font-size: 12px;">
-                                <span class="material-icons-round" style="font-size: 14px;">filter_alt_off</span> Reset Filters
-                            </button>
-                            <div class="icon-btn" style="width: 32px; height: 32px; border: none; background: var(--bg-surface-hover); pointer-events: none;">
-                                <span class="material-icons-round" id="tax-expenses-chevron">${isExpensesAuditCollapsed ? 'expand_more' : 'expand_less'}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="tax-expenses-audit-body" style="display: ${isExpensesAuditCollapsed ? 'none' : 'block'}; margin-top: 16px;">
-                        <!-- Search & Account Filters (Feature 6) -->
-                        <div class="tax-table-toolbar">
-                            <div class="tax-search-box">
-                                <span class="material-icons-round" style="font-size: 18px; color: var(--text-secondary);">search</span>
-                                <input type="text" id="tax-tx-search" placeholder="Search payee, merchant, category..." value="${searchQuery}">
-                                ${searchQuery ? `
-                                    <span class="material-icons-round" id="tax-tx-search-clear" style="font-size: 16px; color: var(--text-secondary); cursor: pointer;">close</span>
-                                ` : ''}
-                            </div>
-
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span class="text-secondary" style="font-size: 13px;">Account:</span>
-                                <select id="tax-tx-account-filter">
-                                    <option value="all"${selectedAccountId === 'all' ? ' selected' : ''}>All Accounts</option>
-                                    ${allAccounts.map(a => `
-                                        <option value="${a.id}"${selectedAccountId === String(a.id) ? ' selected' : ''}>${a.name}</option>
-                                    `).join('')}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div id="tax-audit-empty-state" style="display: ${filteredExpenses.length === 0 ? 'block' : 'none'};">
-                            ${Components.emptyState('receipt_long', 'No matching transactions', 'No allowable expenses match the selected search and filter criteria.')}
-                        </div>
-
-                        <div class="table-container" id="tax-audit-table-container" style="display: ${filteredExpenses.length > 0 ? 'block' : 'none'};">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Payee / Description</th>
-                                        <th>Category</th>
-                                        <th>Account</th>
-                                        <th>Audit Status</th>
-                                        <th style="text-align: right;">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tax-audit-table-tbody">
-                                    ${filteredExpenses.map(t => {
-                                        const acc = DataManager.getAccountById(t.accountId);
-                                        return `
-                                            <tr>
-                                                <td style="font-size: 13px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}</td>
-                                                <td><div style="font-weight: 500;">${t.merchant}</div></td>
-                                                <td><span class="tag bg-primary-light">${t.category}</span></td>
-                                                <td>${acc ? acc.name : 'Unknown'}</td>
-                                                <td><span class="tax-tag tax-tag-deductible">Allowable Deduction</span></td>
-                                                <td style="text-align: right; font-weight: 600; color: var(--danger);">
-                                                    -${DataManager.formatCurrency(t.absAmount)}
-                                                </td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            dynamicArea.innerHTML = metricsHTML + taxSlabHTML + categoryBreakdownHTML + loanReconciliationHTML + transactionAuditHTML;
-
             // Render Chart.js Donut Chart
             if (hasExpenses) {
                 const chartCanvas = document.getElementById('tax-category-chart');
@@ -1218,8 +1261,8 @@ Views.tax = () => {
             });
         }
 
-        // Initial render
-        renderTaxDashboard();
+        // Initial render: HTML already rendered synchronously into DOM, skip re-injecting HTML
+        renderTaxDashboard(true);
     }, 0);
 
     return html;
