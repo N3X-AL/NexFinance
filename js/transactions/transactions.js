@@ -201,7 +201,10 @@ Views.transactions = () => {
                         startDate.setDate(0);
                     }
                     startDate.setHours(0, 0, 0, 0);
-                    filteredTxs = regularTxs.filter(t => new Date(t.date) >= startDate);
+                    filteredTxs = regularTxs.filter(t => {
+                        const d = new Date(t.date);
+                        return d >= startDate && d <= now;
+                    });
                 }
                 if (currentAccount !== 'all') {
                     filteredTxs = filteredTxs.filter(t => t.accountId === parseInt(currentAccount));
