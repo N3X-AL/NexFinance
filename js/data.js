@@ -221,7 +221,7 @@ const DataManager = {
         now.setHours(23, 59, 59, 999);
         
         const startDate = new Date(now);
-        const expectedMonth = (startDate.getMonth() - months + 12) % 12;
+        const expectedMonth = (startDate.getMonth() - (months % 12) + 12) % 12;
         startDate.setMonth(startDate.getMonth() - months);
         if (startDate.getMonth() !== expectedMonth) {
             startDate.setDate(0);
@@ -359,6 +359,50 @@ const DataManager = {
         const years = [...new Set(appData.transactions.map(t => new Date(t.date).getFullYear()))];
         if (!years.includes(currentYear)) years.push(currentYear);
         return years.sort((a, b) => b - a);
+    },
+
+    getTransactionMonthStops: () => {
+        const txs = appData.transactions.filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer');
+        if (txs.length === 0) return [1];
+
+        let minTime = Infinity;
+        let maxTime = 0;
+        for (const t of txs) {
+            const time = new Date(t.date).getTime();
+            if (!isNaN(time)) {
+                if (time < minTime) minTime = time;
+                if (time > maxTime) maxTime = time;
+            }
+        }
+        if (minTime === Infinity) return [1];
+
+        const earliest = new Date(minTime);
+        const latest = new Date(maxTime);
+        const totalMonths = Math.max(1, (latest.getFullYear() - earliest.getFullYear()) * 12 + (latest.getMonth() - earliest.getMonth()) + 1);
+
+        const candidates = [1, 2, 3, 4, 5, 6, 9, 12, 18, 24, 36, 48, 60, 72, 84, 96, 120];
+        const stops = candidates.filter(m => m < totalMonths);
+        stops.push(totalMonths);
+        return [...new Set(stops)].sort((a, b) => a - b);
+    },
+
+    formatMonthStop: (months, maxMonths) => {
+        if (months >= maxMonths && maxMonths > 1) {
+            if (months % 12 === 0) {
+                const yrs = months / 12;
+                return `All (${yrs} ${yrs === 1 ? 'Yr' : 'Yrs'})`;
+            }
+            return `All (${months} Mos)`;
+        }
+        if (months < 12) {
+            return `${months} ${months === 1 ? 'Mo' : 'Mos'}`;
+        }
+        if (months % 12 === 0) {
+            const yrs = months / 12;
+            return `${yrs} ${yrs === 1 ? 'Yr' : 'Yrs'}`;
+        }
+        const yrs = (months / 12).toFixed(1).replace(/\.0$/, '');
+        return `${yrs} Yrs`;
     },
 
     getDailyChartDataForMonth: (type, year, month, category = null, accountId = null) => {

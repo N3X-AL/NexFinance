@@ -18,10 +18,14 @@ Views.transactions = () => {
 
     const regularHTML = regularTxs.length > 0 ? Components.transactionTable(regularTxs) : Components.emptyState('receipt_long', 'No transactions yet', 'Start adding your income and expenses to track your finances.');
 
+    const monthStops = DataManager.getTransactionMonthStops();
+    const maxMonths = monthStops[monthStops.length - 1];
+
     setTimeout(() => {
         if (!document.getElementById('tx-cashflow-chart-canvas')) return;
 
-        let currentMonths = 1;
+        let currentStopIndex = 0;
+        let currentMonths = monthStops[currentStopIndex] || 1;
         let chartInstance = null;
         let isDateFiltered = false;
         let currentChartType = 'net'; // 'net' | 'income' | 'expense'
@@ -47,7 +51,7 @@ Views.transactions = () => {
                 const now = new Date(txNow);
                 now.setHours(23, 59, 59, 999);
                 const startDate = new Date(now);
-                const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
+                const expectedMonth = (startDate.getMonth() - (currentMonths % 12) + 12) % 12;
                 startDate.setMonth(startDate.getMonth() - currentMonths);
                 if (startDate.getMonth() !== expectedMonth) {
                     startDate.setDate(0);
@@ -154,6 +158,14 @@ Views.transactions = () => {
                 if (titleEl) titleEl.textContent = 'Daily Cashflow';
                 if (sliderContainer) sliderContainer.style.display = 'flex';
                 if (monthPicker) monthPicker.style.display = 'none';
+                const slider = document.getElementById('tx-chart-months-slider');
+                const label = document.getElementById('tx-chart-months-label');
+                if (slider && label) {
+                    slider.min = 0;
+                    slider.max = monthStops.length - 1;
+                    slider.value = currentStopIndex;
+                    label.textContent = DataManager.formatMonthStop(currentMonths, maxMonths);
+                }
             }
         };
 
@@ -183,13 +195,16 @@ Views.transactions = () => {
                     const now = new Date(txNow);
                     now.setHours(23, 59, 59, 999);
                     const startDate = new Date(now);
-                    const expectedMonth = (startDate.getMonth() - currentMonths + 12) % 12;
+                    const expectedMonth = (startDate.getMonth() - (currentMonths % 12) + 12) % 12;
                     startDate.setMonth(startDate.getMonth() - currentMonths);
                     if (startDate.getMonth() !== expectedMonth) {
                         startDate.setDate(0);
                     }
                     startDate.setHours(0, 0, 0, 0);
-                    filteredTxs = regularTxs.filter(t => new Date(t.date) >= startDate);
+                    filteredTxs = regularTxs.filter(t => {
+                        const d = new Date(t.date);
+                        return d >= startDate && d <= now;
+                    });
                 }
                 if (currentAccount !== 'all') {
                     filteredTxs = filteredTxs.filter(t => t.accountId === parseInt(currentAccount));
@@ -448,8 +463,9 @@ Views.transactions = () => {
         });
 
         document.getElementById('tx-chart-months-slider').addEventListener('input', (e) => {
-            currentMonths = parseInt(e.target.value);
-            document.getElementById('tx-chart-months-label').textContent = currentMonths + (currentMonths === 1 ? ' Mo' : ' Mos');
+            currentStopIndex = parseInt(e.target.value);
+            currentMonths = monthStops[currentStopIndex] || 1;
+            document.getElementById('tx-chart-months-label').textContent = DataManager.formatMonthStop(currentMonths, maxMonths);
             updateCategoryDropdown();
             isDateFiltered = false; currentDateFilterLabel = null;
             renderChart();
@@ -532,8 +548,8 @@ Views.transactions = () => {
                     </div>
                     <div id="tx-chart-slider-container" style="display: flex; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
                         <span class="material-icons-round text-secondary" style="font-size: 18px;">date_range</span>
-                        <input type="range" id="tx-chart-months-slider" min="1" max="6" value="1" style="width: 80px; accent-color: var(--primary);">
-                        <span id="tx-chart-months-label" style="font-weight: 600; width: 45px; text-align: right;">1 Mo</span>
+                        <input type="range" id="tx-chart-months-slider" min="0" max="${monthStops.length - 1}" value="0" style="width: 100px; accent-color: var(--primary);">
+                        <span id="tx-chart-months-label" style="font-weight: 600; min-width: 55px; text-align: right;">${DataManager.formatMonthStop(monthStops[0] || 1, maxMonths)}</span>
                     </div>
                     <div id="tx-chart-month-picker" style="display: none; align-items: center; gap: 8px; font-size: 14px; background: var(--bg-surface-solid); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
                         <span class="material-icons-round text-secondary" style="font-size: 18px;">calendar_month</span>
