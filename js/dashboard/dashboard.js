@@ -44,7 +44,7 @@ Views.dashboard = () => {
     })();
 
     setTimeout(() => {
-        if (!document.getElementById('main-dashboard-chart')) return;
+        if (typeof document === 'undefined' || !document.getElementById || !document.getElementById('main-dashboard-chart')) return;
         
         const ctx = document.getElementById('main-dashboard-chart').getContext('2d');
         let currentType = 'both';
@@ -104,10 +104,12 @@ Views.dashboard = () => {
             }
         };
 
-        const renderChart = () => {
-            isDateFiltered = false;
-            const container = document.getElementById('dashboard-tx-container');
-            if (container) container.innerHTML = regularTxHTML;
+        const renderChart = (skipTxRestore = false) => {
+            if (!skipTxRestore) {
+                isDateFiltered = false;
+                const container = document.getElementById('dashboard-tx-container');
+                if (container) container.innerHTML = regularTxHTML;
+            }
 
             if (chartInstance) {
                 chartInstance.destroy();
@@ -525,11 +527,11 @@ Views.dashboard = () => {
         };
 
         if (typeof Chart !== 'undefined') {
-            renderChart();
+            renderChart(true);
             updateSliderUI();
         } else {
             // Retry once if CDN is slow
-            setTimeout(() => { renderChart(); updateSliderUI(); }, 500);
+            setTimeout(() => { renderChart(true); updateSliderUI(); }, 500);
         }
 
         const onDocClick = (e) => {
@@ -635,26 +637,26 @@ Views.dashboard = () => {
             });
         });
 
-    }, 100);
+    }, 50);
 
     return `
         <div class="dashboard-grid">
             <!-- Stats Row -->
-            <div class="col-span-3" style="animation-delay: 0.1s;">
+            <div class="col-span-3">
                 ${Components.statCard('Net Worth', DataManager.formatCurrency(netWorth), trends.netWorth, 'account_balance_wallet', 'primary')}
             </div>
-            <div class="col-span-3" style="animation-delay: 0.15s;">
+            <div class="col-span-3">
                 ${Components.statCard('Money in Hand', DataManager.formatCurrency(moneyInHand), trends.moneyInHand, 'payments', 'success')}
             </div>
-            <div class="col-span-3" style="animation-delay: 0.2s;">
+            <div class="col-span-3">
                 ${Components.statCard('Monthly Income', DataManager.formatCurrency(income), trends.income, 'arrow_downward', 'success')}
             </div>
-            <div class="col-span-3" style="animation-delay: 0.3s;">
+            <div class="col-span-3">
                 ${Components.statCard('Monthly Expenses', DataManager.formatCurrency(expenses), trends.expense, 'arrow_upward', 'danger')}
             </div>
 
             <!-- Chart Row -->
-            <div class="col-span-12 animate-slide-up" style="animation-delay: 0.35s;">
+            <div class="col-span-12 animate-slide-up">
                 <div class="card">
                     <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
                         <h3 class="card-title">Financial Trends</h3>
@@ -706,7 +708,7 @@ Views.dashboard = () => {
             </div>
 
             <!-- Main Content Row -->
-            <div class="col-span-8 animate-slide-up" style="animation-delay: 0.4s;">
+            <div class="col-span-8 animate-slide-up">
                 <div class="card" style="height: 100%;">
                     <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
                         <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -725,7 +727,7 @@ Views.dashboard = () => {
             </div>
 
             <!-- Side Content Row -->
-            <div class="col-span-4 grid-cols-1 animate-slide-up" style="animation-delay: 0.5s; align-content: start;">
+            <div class="col-span-4 grid-cols-1 animate-slide-up" style="align-content: start;">
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Your Accounts</h3>

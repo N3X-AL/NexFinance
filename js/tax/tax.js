@@ -394,7 +394,7 @@ const TaxManager = {
         const metricsHTML = `
             <div class="dashboard-grid" style="margin-bottom: 24px;">
                 <!-- Total Allowable Expenses -->
-                <div class="col-span-3 animate-slide-up" style="animation-delay: 0.1s;">
+                <div class="col-span-3 animate-slide-up">
                     <div class="card stat-card" style="height: 100%;">
                         <div class="card-header" style="margin-bottom: 0;">
                             <h3 class="card-title text-secondary">Allowable Expenses</h3>
@@ -413,7 +413,7 @@ const TaxManager = {
                 </div>
 
                 <!-- Capital Lent (Loans Given) -->
-                <div class="col-span-3 animate-slide-up" style="animation-delay: 0.15s;">
+                <div class="col-span-3 animate-slide-up">
                     <div class="card stat-card" style="height: 100%;">
                         <div class="card-header" style="margin-bottom: 0;">
                             <h3 class="card-title text-secondary">Capital Lent (Debtors)</h3>
@@ -432,7 +432,7 @@ const TaxManager = {
                 </div>
 
                 <!-- Capital Inflows (Borrowed & Recoveries) -->
-                <div class="col-span-3 animate-slide-up" style="animation-delay: 0.2s;">
+                <div class="col-span-3 animate-slide-up">
                     <div class="card stat-card" style="height: 100%;">
                         <div class="card-header" style="margin-bottom: 0;">
                             <h3 class="card-title text-secondary">Capital Inflows</h3>
@@ -451,7 +451,7 @@ const TaxManager = {
                 </div>
 
                 <!-- Anti-Falsification Reconciliation -->
-                <div class="col-span-3 animate-slide-up" style="animation-delay: 0.25s;">
+                <div class="col-span-3 animate-slide-up">
                     <div class="card stat-card" style="height: 100%;">
                         <div class="card-header" style="margin-bottom: 0;">
                             <h3 class="card-title text-secondary">Anti-Falsification Audit</h3>
@@ -472,7 +472,7 @@ const TaxManager = {
 
         // Pakistan Tax Slab Estimator HTML
         const taxSlabHTML = `
-            <div class="card tax-slab-card animate-slide-up" style="margin-bottom: 24px; animation-delay: 0.28s;">
+            <div class="card tax-slab-card animate-slide-up" style="margin-bottom: 24px;">
                 <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
                     <div>
                         <div style="display: flex; align-items: center; gap: 10px;">
@@ -546,7 +546,7 @@ const TaxManager = {
         const categoryBreakdownHTML = `
             <div class="dashboard-grid" style="margin-bottom: 24px;">
                 <!-- Left: Category Chart -->
-                <div class="col-span-5 animate-slide-up" style="animation-delay: 0.3s;">
+                <div class="col-span-5 animate-slide-up">
                     <div class="card" style="height: 100%; display: flex; flex-direction: column;">
                         <div class="card-header">
                             <div>
@@ -567,7 +567,7 @@ const TaxManager = {
                 </div>
 
                 <!-- Right: "What Went Where" Detailed Breakdown List -->
-                <div class="col-span-7 animate-slide-up" style="animation-delay: 0.35s;">
+                <div class="col-span-7 animate-slide-up">
                     <div class="card" style="height: 100%;">
                         <div class="card-header">
                             <div>
@@ -614,7 +614,7 @@ const TaxManager = {
         // Loan Capital Movements & Anti-Falsification Section
         const hasLoans = currentReport.loanCapitalMovements.length > 0;
         const loanReconciliationHTML = `
-            <div class="card animate-slide-up" style="margin-bottom: 24px; animation-delay: 0.4s;">
+            <div class="card animate-slide-up" style="margin-bottom: 24px;">
                 <div class="card-header card-header-collapsible" id="tax-loan-audit-header" style="margin-bottom: 0;">
                     <div>
                         <div style="display: flex; align-items: center; gap: 10px;">
@@ -703,7 +703,7 @@ const TaxManager = {
         const hasActiveFilters = selectedCategory !== 'all' || selectedAccountId !== 'all' || searchQuery.trim() !== '';
 
         const transactionAuditHTML = `
-            <div class="card animate-slide-up" style="animation-delay: 0.45s;">
+            <div class="card animate-slide-up">
                 <div class="card-header card-header-collapsible" id="tax-expenses-audit-header" style="margin-bottom: 0;">
                     <div>
                         <h3 class="card-title">Itemized Allowable Expenses Audit</h3>
@@ -840,7 +840,7 @@ Views.tax = () => {
             </div>
 
             <!-- Filter Toolbar -->
-            <div class="tax-filter-bar animate-slide-up" style="animation-delay: 0.05s;">
+            <div class="tax-filter-bar animate-slide-up">
                 <div class="tax-presets">
                     <button class="tax-preset-pill active" id="preset-current-fy" data-preset="current-fy">
                         ${currentFY.label}

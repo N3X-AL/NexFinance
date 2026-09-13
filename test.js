@@ -12,7 +12,9 @@ global.localStorage = {
     removeItem(key) { delete this._data[key]; }
 };
 global.document = {
-    addEventListener() {}
+    addEventListener() {},
+    getElementById(id) { return null; },
+    querySelectorAll() { return []; }
 };
 
 // Evaluate scripts in the global context while preserving lexical identifiers and attaching to global
@@ -122,6 +124,20 @@ console.log("✔ Settled loans list descending order test passed!");
     const txHtml = global.Views.transactions();
     assert(txHtml.includes('id="transactions-page-container"'), "transactions view should contain transactions-page-container");
     console.log("✔ Transactions view synchronous initial render test passed!");
+
+    // Test 6: CSS animation fill-mode is both (prevents flash-before-animation)
+    const cssContent = fs.readFileSync('./css/components.css', 'utf8').replace(/\r\n/g, '\n');
+    assert(cssContent.includes('.animate-slide-up {\n    animation: slideInUp 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;'), "CSS animate-slide-up must use both fill-mode");
+    console.log("✔ CSS animation-fill-mode both test passed!");
+
+    // Test 7: Dashboard view synchronous render and no animation-delay
+    evalFile('./js/dashboard/dashboard.js');
+    const dashboardHtml = global.Views.dashboard();
+    assert(dashboardHtml.includes('id="dashboard-tx-container"'), "dashboard view should contain dashboard-tx-container");
+    assert(!dashboardHtml.includes('animation-delay'), "dashboard view must not contain animation-delay");
+    assert(!global.Views.loans().includes('animation-delay'), "loans view must not contain animation-delay");
+    assert(!global.Views.tax().includes('animation-delay'), "tax view must not contain animation-delay");
+    console.log("✔ Animation-delay elimination across dashboard, loans, and tax passed!");
 
     console.log("All tests passed successfully!");
 })();
