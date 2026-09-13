@@ -996,15 +996,6 @@
     .tax-slab-metric-sub {
         font-size: 10px;
     }
-
-    .stat-card .stat-value {
-        font-size: 22px;
-        word-break: break-all;
-    }
-
-    .stat-card .card-title {
-        font-size: 13px;
-    }
 }
 
 @media (max-width: 360px) {
