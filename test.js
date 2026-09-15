@@ -20,7 +20,7 @@ global.document = {
 // Evaluate scripts in the global context while preserving lexical identifiers and attaching to global
 const evalFile = (path) => {
     let code = fs.readFileSync(path, 'utf8');
-    code = code.replace(/const\s+(DataManager|Components|CloudSync|appData|defaultData|savedData)\s*=/g, 'var $1 = global.$1 =');
+    code = code.replace(/const\s+(DataManager|CreditCardManager|CreditCardsView|Components|CloudSync|appData|defaultData|savedData)\s*=/g, 'var $1 = global.$1 =');
     vm.runInThisContext(code);
 };
 
@@ -160,7 +160,110 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(cssContent.includes('.tax-presets') && cssContent.includes('overflow-x: auto;'), "components.css must include mobile scrolling for tax-presets");
     assert(cssContent.includes('.tax-date-field'), "components.css must include .tax-date-field styling");
     assert(cssContent.includes('#tax-page-container'), "components.css must include #tax-page-container constraints");
-    console.log("✔ Tax view mobile CSS definitions test passed!");
+    // Test 10: Credit Card Category Protection & Deduplication
+    const initialCategories = global.DataManager.getCategories();
+    assert(initialCategories.includes('Credit Card'), "Categories must include 'Credit Card'");
+    
+    // Attempting to delete 'Credit Card' must be blocked
+    const deleteResult = global.DataManager.deleteCategory('Credit Card', 'Shopping');
+    assert(deleteResult === false, "Deleting 'Credit Card' category must return false");
+    assert(global.DataManager.getCategories().includes('Credit Card'), "'Credit Card' must still exist after delete attempt");
+
+    // Attempting to rename 'Credit Card' must be blocked
+    const editResult = global.DataManager.editCategory('Credit Card', 'My Credit Cards');
+    assert(editResult === false, "Renaming 'Credit Card' category must return false");
+    assert(global.DataManager.getCategories().includes('Credit Card'), "'Credit Card' must not be renamed");
+
+    // Attempting to rename another category to 'Credit Card' must be blocked
+    const editCollisionResult = global.DataManager.editCategory('Shopping', 'Credit Card');
+    assert(editCollisionResult === false, "Renaming another category to 'Credit Card' must return false");
+
+    // Deduplication check: adding 'credit card' (case-insensitive) must be rejected
+    const addDuplicateResult = global.DataManager.addCategory('credit card');
+    assert(addDuplicateResult === false, "Adding lowercase duplicate 'credit card' must return false");
+    console.log("✔ Credit Card category protection & deduplication test passed!");
+
+    // Test 11: CreditCardManager card creation and account synchronization
+    const createdCard = global.CreditCardManager.saveCreditCard({
+        name: 'Sapphire Preferred',
+        bank: 'Chase',
+        last4: '4128',
+        creditLimit: 10000,
+        apr: 24.0,
+        billingCycleDay: 15,
+        gracePeriodDays: 25,
+        minPaymentPercent: 3.5,
+        minPaymentFloor: 25,
+        colorTheme: 'obsidian'
+    });
+    assert(createdCard && createdCard.id, "Credit card must be created with valid ID");
+    assert(createdCard.creditLimit === 10000, "Credit limit must be 10000");
+    const linkedAccount = global.DataManager.getAccountById(createdCard.accountId);
+    assert(linkedAccount && linkedAccount.type === 'Credit', "Linked account must be created with type 'Credit'");
+    console.log("✔ CreditCardManager card creation and account synchronization test passed!");
+
+    // Test 12: Billing Cycle and Bill Projection calculation
+    // Reference date: Sep 10, 2026 (Before statement day 15)
+    const refDateBeforeCut = new Date(2026, 8, 10); // Sep 10, 2026
+    const cycleBeforeCut = global.CreditCardManager.getCardBillingCycle(createdCard, refDateBeforeCut);
+    assert(cycleBeforeCut.daysUntilCut === 5, "Days until cut should be 5 days when refDate is Sep 10 and cut is Sep 15");
+    assert(cycleBeforeCut.daysUntilDue === 30, "Days until due should be 30 days (5 + 25 grace days)");
+
+    // Add purchase transaction within this cycle on the card
+    global.DataManager.addTransaction({
+        date: '2026-09-05',
+        merchant: 'Electronics Store',
+        category: 'Shopping',
+        amount: -800,
+        accountId: createdCard.accountId,
+        status: 'Completed'
+    });
+
+    const metrics1 = global.CreditCardManager.getCardMetrics(createdCard, refDateBeforeCut);
+    assert(metrics1.totalOutstanding === 800, "Outstanding balance should be 800");
+    assert(metrics1.cyclePurchases === 800, "Cycle purchases should be 800");
+    assert(metrics1.isGracePeriodActive === true, "Grace period should be active since no prior unpaid balance");
+    assert(metrics1.estimatedInterest === 0, "Estimated interest should be 0 during grace period");
+    assert(metrics1.projectedStatementTotal === 800, "Projected statement total should be 800");
+    assert(metrics1.utilizationRate === 8.0, "Utilization should be 8.0% (800 / 10000)");
+    assert(metrics1.healthStatus === 'optimal', "Health status should be optimal (<30%)");
+    console.log("✔ Billing cycle and grace period bill projection test passed!");
+
+    // Test 13: Card Payment handling via Category 'Credit Card'
+    // Create a checking account to pay from
+    const checkingAcc = { id: 888, name: 'Checking Account', type: 'Checking', balance: 5000, color: 'var(--primary)' };
+    global.appData.accounts.push(checkingAcc);
+
+    // Record payment of $500 towards credit card
+    const paymentSuccess = global.CreditCardManager.recordCardPayment({
+        fromAccountId: checkingAcc.id,
+        cardId: createdCard.id,
+        amount: 500,
+        date: '2026-09-08',
+        note: 'Monthly Payment'
+    });
+    assert(paymentSuccess === true, "recordCardPayment must return true");
+
+    // Verify balances updated seamlessly
+    assert(checkingAcc.balance === 4500, "Checking balance should be reduced by 500");
+    const updatedLinkedAccount = global.DataManager.getAccountById(createdCard.accountId);
+    assert(updatedLinkedAccount.balance === -300, "Card balance should be -300 (debt reduced from 800 to 300)");
+
+    const metricsAfterPayment = global.CreditCardManager.getCardMetrics(createdCard, refDateBeforeCut);
+    assert(metricsAfterPayment.totalOutstanding === 300, "Outstanding balance after payment should be 300");
+    assert(metricsAfterPayment.cyclePayments === 500, "Cycle payments should be 500");
+    assert(metricsAfterPayment.projectedStatementTotal === 300, "Projected statement total should now be 300");
+    assert(metricsAfterPayment.utilizationRate === 3.0, "Utilization should drop to 3.0%");
+    console.log("✔ Credit Card payment flow and real-time metrics update test passed!");
+
+    // Test 14: Credit Cards view synchronous initial render
+    evalFile('./js/credit-cards/credit-cards.js');
+    const ccHtml = global.Views['credit-cards']();
+    assert(ccHtml.includes('Projected Next Statement Bill'), "credit-cards view should contain Projected Next Statement Bill");
+    assert(ccHtml.includes('virtual-card-container'), "credit-cards view should contain virtual-card-container");
+    assert(ccHtml.includes('Sapphire Preferred'), "credit-cards view should contain active card name");
+    assert(ccHtml.includes('Activity on Sapphire Preferred'), "credit-cards view should contain card activity table");
+    console.log("✔ Credit Cards view synchronous initial render test passed!");
 
     console.log("All tests passed successfully!");
 })();

@@ -119,6 +119,7 @@ class App {
             investments: { title: 'Investments', sub: 'Monitor your portfolio performance.' },
             reports: { title: 'Reports', sub: 'Analyze your financial trends.' },
             tax: { title: 'Tax & Compliance', sub: 'Pakistan Fiscal Year expense report & wealth reconciliation.' },
+            'credit-cards': { title: 'Credit Cards', sub: 'Track statement cycles, projected bills, and credit utilization.' },
             settings: { title: 'Settings', sub: 'Configure your application preferences.' }
         };
         
@@ -299,6 +300,8 @@ class App {
 
     showAddTransactionModal() {
         const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const cards = (typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCards() : [];
+        const cardOptions = cards.map(c => `<option value="${c.id}">${c.name} (${c.bank} ···${c.last4})</option>`).join('');
         
         const content = `
             <form id="add-transaction-form">
@@ -313,9 +316,16 @@ class App {
                     <label class="form-label">Date</label>
                     <input type="date" id="t-date" class="form-control" required value="${DataManager.getLocalDateString()}">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="t-merchant-group">
                     <label class="form-label">Merchant / Description</label>
                     <input type="text" id="t-merchant" class="form-control" placeholder="e.g. Amazon" required>
+                </div>
+                <div class="form-group" id="t-card-selector-group" style="display: none;">
+                    <label class="form-label">Credit Card to Pay</label>
+                    <select id="t-card-select" class="form-control">
+                        ${cardOptions || '<option value="">No Credit Cards configured</option>'}
+                    </select>
+                    <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">This payment will be credited directly to the selected card.</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
@@ -344,13 +354,31 @@ class App {
             const type = document.getElementById('t-type').value;
             let amount = parseFloat(document.getElementById('t-amount').value);
             if (type === 'expense') amount = -Math.abs(amount);
+
+            const categoryVal = document.getElementById('t-category').value.trim();
+            const isCC = categoryVal.toLowerCase() === 'credit card';
+            let merchantVal = document.getElementById('t-merchant').value;
+            let toAccountId = null;
+            let targetCardId = null;
+
+            if (isCC && cards.length > 0) {
+                const cardSelect = document.getElementById('t-card-select');
+                const selectedCard = CreditCardManager.getCreditCardById(cardSelect ? cardSelect.value : null);
+                if (selectedCard) {
+                    merchantVal = `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
+                    toAccountId = selectedCard.accountId;
+                    targetCardId = selectedCard.id;
+                }
+            }
             
             const newTx = {
                 date: document.getElementById('t-date').value,
-                merchant: document.getElementById('t-merchant').value,
-                category: document.getElementById('t-category').value,
+                merchant: merchantVal,
+                category: categoryVal,
                 amount: amount,
                 accountId: parseInt(document.getElementById('t-account').value),
+                toAccountId: toAccountId,
+                targetCardId: targetCardId,
                 status: 'Completed'
             };
             
@@ -360,6 +388,36 @@ class App {
             this.navigate(this.currentRoute);
             return true;
         });
+
+        // Dynamic morphing: toggle merchant vs card dropdown based on category
+        const setupCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId) => {
+            const catInput = document.getElementById(catInputId);
+            const merchantGroup = document.getElementById(merchantGroupId);
+            const cardGroup = document.getElementById(cardGroupId);
+            const merchantInput = document.getElementById(merchantInputId);
+
+            const checkCategory = () => {
+                if (!catInput) return;
+                const isCC = catInput.value.trim().toLowerCase() === 'credit card';
+                if (isCC && cards.length > 0) {
+                    if (merchantGroup) merchantGroup.style.display = 'none';
+                    if (cardGroup) cardGroup.style.display = 'block';
+                    if (merchantInput) merchantInput.required = false;
+                } else {
+                    if (merchantGroup) merchantGroup.style.display = 'block';
+                    if (cardGroup) cardGroup.style.display = 'none';
+                    if (merchantInput) merchantInput.required = true;
+                }
+            };
+
+            if (catInput) {
+                catInput.addEventListener('input', checkCategory);
+                catInput.addEventListener('change', checkCategory);
+            }
+            return checkCategory;
+        };
+
+        setupCategoryListener('t-category', 't-merchant-group', 't-card-selector-group', 't-merchant');
 
         // Initialize Combo Box for category
         setTimeout(() => {
@@ -375,8 +433,14 @@ class App {
 
         const isExpense = tx.amount < 0;
         const absAmount = Math.abs(tx.amount);
+        const cards = (typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCards() : [];
+        const isInitialCC = (tx.category && tx.category.toLowerCase() === 'credit card');
         
         const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === tx.accountId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const cardOptions = cards.map(c => {
+            const isSelected = (tx.targetCardId === c.id) || (tx.toAccountId === c.accountId);
+            return `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.name} (${c.bank} ···${c.last4})</option>`;
+        }).join('');
         
         const content = `
             <form id="edit-transaction-form">
@@ -391,9 +455,16 @@ class App {
                     <label class="form-label">Date</label>
                     <input type="date" id="et-date" class="form-control" required value="${tx.date}">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="et-merchant-group" style="${isInitialCC && cards.length > 0 ? 'display: none;' : ''}">
                     <label class="form-label">Merchant / Description</label>
-                    <input type="text" id="et-merchant" class="form-control" value="${tx.merchant}" required>
+                    <input type="text" id="et-merchant" class="form-control" value="${tx.merchant}" ${isInitialCC && cards.length > 0 ? '' : 'required'}>
+                </div>
+                <div class="form-group" id="et-card-selector-group" style="${isInitialCC && cards.length > 0 ? 'display: block;' : 'display: none;'}">
+                    <label class="form-label">Credit Card to Pay</label>
+                    <select id="et-card-select" class="form-control">
+                        ${cardOptions || '<option value="">No Credit Cards configured</option>'}
+                    </select>
+                    <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">This payment will be credited directly to the selected card.</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
@@ -422,13 +493,37 @@ class App {
             const type = document.getElementById('et-type').value;
             let amount = parseFloat(document.getElementById('et-amount').value);
             if (type === 'expense') amount = -Math.abs(amount);
+
+            const categoryVal = document.getElementById('et-category').value.trim();
+            const isCC = categoryVal.toLowerCase() === 'credit card';
+            let merchantVal = document.getElementById('et-merchant').value;
+            let toAccountId = tx.toAccountId || null;
+            let targetCardId = tx.targetCardId || null;
+
+            if (isCC && cards.length > 0) {
+                const cardSelect = document.getElementById('et-card-select');
+                const selectedCard = CreditCardManager.getCreditCardById(cardSelect ? cardSelect.value : null);
+                if (selectedCard) {
+                    merchantVal = `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
+                    toAccountId = selectedCard.accountId;
+                    targetCardId = selectedCard.id;
+                }
+            } else if (!isCC) {
+                // If category was changed away from Credit Card, clear toAccountId/targetCardId if it was a CC payment
+                if (tx.targetCardId) {
+                    toAccountId = null;
+                    targetCardId = null;
+                }
+            }
             
             const updatedTx = {
                 date: document.getElementById('et-date').value,
-                merchant: document.getElementById('et-merchant').value,
-                category: document.getElementById('et-category').value,
+                merchant: merchantVal,
+                category: categoryVal,
                 amount: amount,
                 accountId: parseInt(document.getElementById('et-account').value),
+                toAccountId: toAccountId,
+                targetCardId: targetCardId,
                 status: tx.status
             };
             
@@ -437,6 +532,34 @@ class App {
             this.navigate(this.currentRoute);
             return true;
         });
+
+        const setupCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId) => {
+            const catInput = document.getElementById(catInputId);
+            const merchantGroup = document.getElementById(merchantGroupId);
+            const cardGroup = document.getElementById(cardGroupId);
+            const merchantInput = document.getElementById(merchantInputId);
+
+            const checkCategory = () => {
+                if (!catInput) return;
+                const isCC = catInput.value.trim().toLowerCase() === 'credit card';
+                if (isCC && cards.length > 0) {
+                    if (merchantGroup) merchantGroup.style.display = 'none';
+                    if (cardGroup) cardGroup.style.display = 'block';
+                    if (merchantInput) merchantInput.required = false;
+                } else {
+                    if (merchantGroup) merchantGroup.style.display = 'block';
+                    if (cardGroup) cardGroup.style.display = 'none';
+                    if (merchantInput) merchantInput.required = true;
+                }
+            };
+
+            if (catInput) {
+                catInput.addEventListener('input', checkCategory);
+                catInput.addEventListener('change', checkCategory);
+            }
+        };
+
+        setupCategoryListener('et-category', 'et-merchant-group', 'et-card-selector-group', 'et-merchant');
 
         setTimeout(() => {
             if (window.ComboBox) {
@@ -662,6 +785,302 @@ class App {
             this.closeModal();
             this.navigate(this.currentRoute);
         }
+    }
+
+    showAddCreditCardModal() {
+        const content = `
+            <form id="add-credit-card-form">
+                <div class="form-group">
+                    <label class="form-label">Card Name</label>
+                    <input type="text" id="cc-name" class="form-control" placeholder="e.g. Sapphire Preferred, Platinum Elite" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Issuing Bank</label>
+                    <input type="text" id="cc-bank" class="form-control" placeholder="e.g. Chase, Standard Chartered, Citi" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Card Number (Last 4 digits)</label>
+                    <input type="text" id="cc-last4" class="form-control" placeholder="4128" maxlength="4" pattern="[0-9]{4}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Credit Limit</label>
+                    <input type="text" inputmode="decimal" id="cc-limit" class="form-control math-input" placeholder="e.g. 5000" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Current Unpaid Balance (if any)</label>
+                    <input type="text" inputmode="decimal" id="cc-balance" class="form-control math-input" placeholder="0.00">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Statement Day (1-31)</label>
+                        <input type="number" id="cc-billing-day" class="form-control" min="1" max="31" value="15" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Grace Period (Days)</label>
+                        <input type="number" id="cc-grace-days" class="form-control" min="1" max="60" value="25" required>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Annual APR (%)</label>
+                        <input type="text" inputmode="decimal" id="cc-apr" class="form-control math-input" value="24.99" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min. Payment (%)</label>
+                        <input type="text" inputmode="decimal" id="cc-min-percent" class="form-control math-input" value="3.5" required>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Min. Floor Amount</label>
+                        <input type="text" inputmode="decimal" id="cc-min-floor" class="form-control math-input" value="25" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Foreign Markup (%)</label>
+                        <input type="text" inputmode="decimal" id="cc-foreign-fee" class="form-control math-input" value="3.0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Card Visual Theme</label>
+                    <select id="cc-theme" class="form-control">
+                        <option value="obsidian">Obsidian Black (Premium)</option>
+                        <option value="royal">Royal Navy (Vibrant Blue)</option>
+                        <option value="emerald">Emerald Green</option>
+                        <option value="gold">Champagne Gold</option>
+                        <option value="titanium">Titanium Silver</option>
+                    </select>
+                </div>
+            </form>
+        `;
+
+        this.showModal('Add Credit Card', content, () => {
+            const form = document.getElementById('add-credit-card-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            CreditCardManager.saveCreditCard({
+                name: document.getElementById('cc-name').value.trim(),
+                bank: document.getElementById('cc-bank').value.trim(),
+                last4: document.getElementById('cc-last4').value.trim(),
+                creditLimit: parseFloat(document.getElementById('cc-limit').value),
+                initialBalance: parseFloat(document.getElementById('cc-balance').value) || 0,
+                billingCycleDay: parseInt(document.getElementById('cc-billing-day').value),
+                gracePeriodDays: parseInt(document.getElementById('cc-grace-days').value),
+                apr: parseFloat(document.getElementById('cc-apr').value),
+                minPaymentPercent: parseFloat(document.getElementById('cc-min-percent').value),
+                minPaymentFloor: parseFloat(document.getElementById('cc-min-floor').value),
+                foreignTxFee: parseFloat(document.getElementById('cc-foreign-fee').value) || 0,
+                colorTheme: document.getElementById('cc-theme').value
+            });
+
+            this.navigate(this.currentRoute);
+            return true;
+        });
+    }
+
+    showEditCreditCardModal(cardId) {
+        const card = CreditCardManager.getCreditCardById(cardId);
+        if (!card) return;
+
+        const content = `
+            <form id="edit-credit-card-form">
+                <div class="form-group">
+                    <label class="form-label">Card Name</label>
+                    <input type="text" id="ecc-name" class="form-control" value="${card.name}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Issuing Bank</label>
+                    <input type="text" id="ecc-bank" class="form-control" value="${card.bank || ''}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Card Number (Last 4 digits)</label>
+                    <input type="text" id="ecc-last4" class="form-control" value="${card.last4 || '0000'}" maxlength="4" pattern="[0-9]{4}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Credit Limit</label>
+                    <input type="text" inputmode="decimal" id="ecc-limit" class="form-control math-input" value="${card.creditLimit}" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Statement Day (1-31)</label>
+                        <input type="number" id="ecc-billing-day" class="form-control" min="1" max="31" value="${card.billingCycleDay || 15}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Grace Period (Days)</label>
+                        <input type="number" id="ecc-grace-days" class="form-control" min="1" max="60" value="${card.gracePeriodDays || 25}" required>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Annual APR (%)</label>
+                        <input type="text" inputmode="decimal" id="ecc-apr" class="form-control math-input" value="${card.apr || 24.99}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min. Payment (%)</label>
+                        <input type="text" inputmode="decimal" id="ecc-min-percent" class="form-control math-input" value="${card.minPaymentPercent || 3.5}" required>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Min. Floor Amount</label>
+                        <input type="text" inputmode="decimal" id="ecc-min-floor" class="form-control math-input" value="${card.minPaymentFloor || 25}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Foreign Markup (%)</label>
+                        <input type="text" inputmode="decimal" id="ecc-foreign-fee" class="form-control math-input" value="${card.foreignTxFee || 0}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Card Visual Theme</label>
+                    <select id="ecc-theme" class="form-control">
+                        <option value="obsidian" ${card.colorTheme === 'obsidian' ? 'selected' : ''}>Obsidian Black (Premium)</option>
+                        <option value="royal" ${card.colorTheme === 'royal' ? 'selected' : ''}>Royal Navy (Vibrant Blue)</option>
+                        <option value="emerald" ${card.colorTheme === 'emerald' ? 'selected' : ''}>Emerald Green</option>
+                        <option value="gold" ${card.colorTheme === 'gold' ? 'selected' : ''}>Champagne Gold</option>
+                        <option value="titanium" ${card.colorTheme === 'titanium' ? 'selected' : ''}>Titanium Silver</option>
+                    </select>
+                </div>
+                <div style="margin-top: 24px; text-align: center;">
+                    <button type="button" class="btn btn-danger" onclick="app.deleteCreditCard(${card.id})" style="width: 100%;">
+                        <span class="material-icons-round" style="font-size: 18px;">delete</span> Delete Card
+                    </button>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Deleting this card will also delete its linked account and associated records.</p>
+                </div>
+            </form>
+        `;
+
+        this.showModal('Edit Credit Card & Rates', content, () => {
+            const form = document.getElementById('edit-credit-card-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            CreditCardManager.saveCreditCard({
+                id: card.id,
+                name: document.getElementById('ecc-name').value.trim(),
+                bank: document.getElementById('ecc-bank').value.trim(),
+                last4: document.getElementById('ecc-last4').value.trim(),
+                creditLimit: parseFloat(document.getElementById('ecc-limit').value),
+                billingCycleDay: parseInt(document.getElementById('ecc-billing-day').value),
+                gracePeriodDays: parseInt(document.getElementById('ecc-grace-days').value),
+                apr: parseFloat(document.getElementById('ecc-apr').value),
+                minPaymentPercent: parseFloat(document.getElementById('ecc-min-percent').value),
+                minPaymentFloor: parseFloat(document.getElementById('ecc-min-floor').value),
+                foreignTxFee: parseFloat(document.getElementById('ecc-foreign-fee').value) || 0,
+                colorTheme: document.getElementById('ecc-theme').value
+            });
+
+            this.navigate(this.currentRoute);
+            return true;
+        });
+    }
+
+    deleteCreditCard(id) {
+        if (confirm("Are you sure you want to delete this credit card? This action cannot be undone.")) {
+            CreditCardManager.deleteCreditCard(id);
+            this.closeModal();
+            this.navigate(this.currentRoute);
+        }
+    }
+
+    showPayCreditCardModal(cardId) {
+        const card = CreditCardManager.getCreditCardById(cardId);
+        if (!card) return;
+
+        const metrics = CreditCardManager.getCardMetrics(card);
+        const bankAccounts = appData.accounts.filter(a => a.id !== card.accountId && a.type !== 'Credit');
+
+        if (bankAccounts.length === 0) {
+            alert("You need at least one bank account (Checking/Savings) to pay your credit card bill.");
+            return;
+        }
+
+        const fromOptions = bankAccounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+
+        const content = `
+            <form id="pay-credit-card-form">
+                <div style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Paying Towards:</span>
+                        <strong style="font-size: 14px;">${card.name} (···${card.last4})</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Projected Statement Bill:</span>
+                        <span style="font-size: 15px; font-weight: 700; color: var(--primary);">${DataManager.formatCurrency(metrics.projectedStatementTotal)}</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Pay From Account</label>
+                    <select id="pcc-from" class="form-control">
+                        ${fromOptions}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Payment Amount</label>
+                    <input type="text" inputmode="decimal" id="pcc-amount" class="form-control math-input" placeholder="0.00" value="${metrics.projectedStatementTotal.toFixed(2)}" required>
+                    
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                        <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('pcc-amount').value = '${metrics.projectedStatementTotal.toFixed(2)}'">
+                            Full Bill (${DataManager.formatCurrency(metrics.projectedStatementTotal)})
+                        </button>
+                        ${metrics.projectedMinDue > 0 ? `
+                        <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('pcc-amount').value = '${metrics.projectedMinDue.toFixed(2)}'">
+                            Min Due (${DataManager.formatCurrency(metrics.projectedMinDue)})
+                        </button>
+                        ` : ''}
+                        ${metrics.payToReach30 > 0 ? `
+                        <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('pcc-amount').value = '${metrics.payToReach30.toFixed(2)}'">
+                            Reach 30% (${DataManager.formatCurrency(metrics.payToReach30)})
+                        </button>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" id="pcc-date" class="form-control" value="${DataManager.getLocalDateString()}" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Note (Optional)</label>
+                    <input type="text" id="pcc-note" class="form-control" placeholder="e.g. Monthly statement payment">
+                </div>
+            </form>
+        `;
+
+        this.showModal(`Pay ${card.name}`, content, () => {
+            const form = document.getElementById('pay-credit-card-form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+
+            const fromAccountId = document.getElementById('pcc-from').value;
+            const amount = parseFloat(document.getElementById('pcc-amount').value);
+            const date = document.getElementById('pcc-date').value;
+            const note = document.getElementById('pcc-note').value;
+
+            if (isNaN(amount) || amount <= 0) {
+                alert("Please enter a valid positive payment amount.");
+                return false;
+            }
+
+            CreditCardManager.recordCardPayment({
+                fromAccountId,
+                cardId: card.id,
+                amount,
+                date,
+                note
+            });
+
+            this.navigate(this.currentRoute);
+            return true;
+        });
     }
 
     showAddLoanModal(type, prefillPerson = '') {

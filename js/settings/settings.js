@@ -92,19 +92,28 @@ Views.settings = () => {
                     </button>
                 </div>
                 <div style="max-height: 200px; overflow-y: auto;">
-                    ${DataManager.getCategories().map(cat => `
+                    ${DataManager.getCategories().map(cat => {
+                        const isProtected = cat.trim().toLowerCase() === 'credit card';
+                        return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
-                            <span>${cat}</span>
+                            <span style="display: flex; align-items: center; gap: 6px;">
+                                ${cat}
+                                ${isProtected ? '<span class="tag bg-primary-light" style="font-size: 10px; padding: 2px 6px;">System</span>' : ''}
+                            </span>
                             <div style="display: flex; gap: 8px;">
-                                <button class="btn btn-secondary" style="padding: 4px 8px;" onclick="app.showEditCategoryModal('${cat.replace(/'/g, "\\'")}', () => app.renderViews())">
+                                ${!isProtected ? `
+                                <button class="btn btn-secondary" style="padding: 4px 8px;" onclick="app.showEditCategoryModal('${cat.replace(/'/g, "\\'")}', () => app.renderViews())" title="Edit">
                                     <span class="material-icons-round" style="font-size: 14px;">edit</span>
                                 </button>
-                                <button class="btn btn-danger" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.showDeleteCategoryModal('${cat.replace(/'/g, "\\'")}', () => app.renderViews())">
+                                <button class="btn btn-danger" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;" onclick="app.showDeleteCategoryModal('${cat.replace(/'/g, "\\'")}', () => app.renderViews())" title="Delete">
                                     <span class="material-icons-round" style="font-size: 14px;">delete</span>
                                 </button>
+                                ` : `
+                                <span class="material-icons-round tooltip" data-tooltip="Default system category cannot be deleted" style="font-size: 16px; color: var(--text-muted); cursor: default;">lock</span>
+                                `}
                             </div>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             </div>
         </div>
