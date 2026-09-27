@@ -293,6 +293,7 @@ const DataManager = {
                     } else if (DataManager.isCreditCardTransaction(t)) {
                         return false;
                     }
+                    if (t.toAccountId || t.category === 'Credit Card' || t.isCashAdvance) return false;
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
@@ -425,7 +426,7 @@ const DataManager = {
     },
 
     getTransactionMonthStops: () => {
-        const txs = appData.transactions.filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer');
+        const txs = appData.transactions.filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer' && t.category !== 'Credit Card' && !t.toAccountId && !t.isCashAdvance);
         if (txs.length === 0) return [1];
 
         let minTime = Infinity;
@@ -486,6 +487,7 @@ const DataManager = {
                     } else if (DataManager.isCreditCardTransaction(t)) {
                         return false;
                     }
+                    if (t.toAccountId || t.category === 'Credit Card' || t.isCashAdvance) return false;
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
@@ -575,11 +577,13 @@ const DataManager = {
     },
 
     getRegularTransactions: (limit = null) => {
-        const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer').sort((a, b) => {
-            const dateDiff = new Date(b.date) - new Date(a.date);
-            if (dateDiff !== 0) return dateDiff;
-            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-        });
+        const sorted = [...appData.transactions]
+            .filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer' && !t.toAccountId && !t.isCashAdvance && !(t.category === 'Credit Card' && (t.targetCardId != null || t.type === 'income' || t.amount > 0)))
+            .sort((a, b) => {
+                const dateDiff = new Date(b.date) - new Date(a.date);
+                if (dateDiff !== 0) return dateDiff;
+                return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+            });
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
@@ -867,16 +871,33 @@ const DataManager = {
         if (index !== -1) {
             const oldT = appData.transactions[index];
             
-            // Revert old transaction effect
+            // Revert old transaction effect on source account
             const oldAccount = appData.accounts.find(a => a.id === parseInt(oldT.accountId));
             if (oldAccount) {
                 oldAccount.balance -= parseFloat(oldT.amount);
             }
+            // Revert old transaction effect on destination account (if it was a transfer/payment)
+            if (oldT.toAccountId) {
+                const oldDestAccount = appData.accounts.find(a => a.id === parseInt(oldT.toAccountId));
+                if (oldDestAccount) {
+                    oldDestAccount.balance += parseFloat(oldT.amount);
+                }
+            }
             
-            // Apply new transaction effect
-            const newAccount = appData.accounts.find(a => a.id === parseInt(updatedTransaction.accountId));
+            // Apply new transaction effect on source account
+            const newAccountId = updatedTransaction.accountId !== undefined ? parseInt(updatedTransaction.accountId) : parseInt(oldT.accountId);
+            const newAmount = updatedTransaction.amount !== undefined ? parseFloat(updatedTransaction.amount) : parseFloat(oldT.amount);
+            const newAccount = appData.accounts.find(a => a.id === newAccountId);
             if (newAccount) {
-                newAccount.balance += parseFloat(updatedTransaction.amount);
+                newAccount.balance += newAmount;
+            }
+            // Apply new transaction effect on destination account (if it is a transfer/payment)
+            const newToAccountId = updatedTransaction.toAccountId !== undefined ? (updatedTransaction.toAccountId ? parseInt(updatedTransaction.toAccountId) : null) : (oldT.toAccountId ? parseInt(oldT.toAccountId) : null);
+            if (newToAccountId) {
+                const newDestAccount = appData.accounts.find(a => a.id === newToAccountId);
+                if (newDestAccount) {
+                    newDestAccount.balance -= newAmount;
+                }
             }
             
             // Update transaction data
@@ -1205,11 +1226,52 @@ const DataManager = {
     },
     
     deleteAccount: (id) => {
+        id = parseInt(id);
+        const deletedAccount = (appData.accounts || []).find(a => a.id === id);
+        const deletedAccName = deletedAccount ? deletedAccount.name : 'Deleted Account';
+
         // Remove the account
-        appData.accounts = appData.accounts.filter(a => a.id !== id);
+        appData.accounts = (appData.accounts || []).filter(a => a.id !== id);
         
-        // Remove all transactions associated with this account
-        appData.transactions = appData.transactions.filter(t => t.accountId !== id && t.toAccountId !== id);
+        // Preserve history on surviving accounts while decoupling references to the deleted account
+        const updatedTransactions = [];
+        (appData.transactions || []).forEach(t => {
+            const isSource = t.accountId === id;
+            const isDest = t.toAccountId === id;
+
+            if (isSource && isDest) {
+                // Internal transaction entirely inside deleted account: drop
+                return;
+            }
+
+            if (isDest && !isSource) {
+                // Surviving account was the source (e.g. transfer/payment sent from Checking to Deleted Account).
+                // Keep transaction on source account, decouple toAccountId reference so history is preserved.
+                t.toAccountId = null;
+                if (t.merchant && !t.merchant.includes('(Deleted)')) {
+                    t.merchant = `${t.merchant} (Deleted)`;
+                }
+                updatedTransactions.push(t);
+            } else if (isSource && t.toAccountId && !isDest) {
+                // Surviving account was the destination (e.g. transfer received by Checking from Deleted Account).
+                // Keep record as an incoming transfer on the surviving destination account.
+                t.accountId = t.toAccountId;
+                t.toAccountId = null;
+                t.amount = Math.abs(t.amount);
+                if (t.merchant && !t.merchant.includes('(Deleted)')) {
+                    t.merchant = `${t.merchant} (from ${deletedAccName} - Deleted)`;
+                } else if (!t.merchant) {
+                    t.merchant = `Transfer from ${deletedAccName} (Deleted)`;
+                }
+                updatedTransactions.push(t);
+            } else if (!isSource && !isDest) {
+                // Unrelated transaction: keep intact
+                updatedTransactions.push(t);
+            }
+            // else isSource && !t.toAccountId: standalone transaction on deleted account (e.g. retail charge): drop
+        });
+
+        appData.transactions = updatedTransactions;
         
         // Remove any linked credit card
         if (appData.creditCards) {
@@ -1526,7 +1588,7 @@ const CreditCardManager = {
 
         // Carried balance from prior statement (unpaid balance before current cycle)
         const regularPurchases = Math.max(0, cyclePurchases - cashAdvancePurchases);
-        const priorUnpaid = Math.max(0, totalOutstanding - cyclePurchases + cyclePayments);
+        const priorUnpaid = Math.max(0, totalOutstanding - cyclePurchases);
         const carriedCashAdvance = Math.min(priorUnpaid, priorCashAdvances);
         const carriedRegularPurchases = Math.max(0, priorUnpaid - carriedCashAdvance);
         const isGracePeriodActive = carriedRegularPurchases <= 0.01;
