@@ -171,26 +171,46 @@ const DataManager = {
         return false;
     },
 
+    isCreditCardAccount: (accountId) => {
+        if (!accountId) return false;
+        const acc = (appData.accounts || []).find(a => a.id === accountId);
+        if (acc && acc.type === 'Credit') return true;
+        if ((appData.creditCards || []).some(c => c.accountId === accountId)) return true;
+        return false;
+    },
+
+    isCreditCardTransaction: (t) => {
+        if (!t) return false;
+        if (t.category === 'Credit Card') return true;
+        if (t.isCashAdvance) return true;
+        if (t.targetCardId != null) return true;
+        if (t.accountId && DataManager.isCreditCardAccount(t.accountId)) return true;
+        if (t.toAccountId && DataManager.isCreditCardAccount(t.toAccountId)) return true;
+        return false;
+    },
+
     getNetWorth: () => {
-        const accountBalance = appData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
+        const nonCreditAccounts = (appData.accounts || []).filter(acc => !DataManager.isCreditCardAccount(acc.id));
+        const accountBalance = nonCreditAccounts.reduce((sum, acc) => sum + acc.balance, 0);
         const loansGivenBalance = appData.loans.filter(l => l.type === 'given').reduce((sum, l) => sum + (l.amount - l.settledAmount), 0);
         const loansReceivedBalance = appData.loans.filter(l => l.type === 'received').reduce((sum, l) => sum + (l.amount - l.settledAmount), 0);
         return accountBalance + loansGivenBalance - loansReceivedBalance;
     },
 
     getMoneyInHand: () => {
-        return appData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
+        const nonCreditAccounts = (appData.accounts || []).filter(acc => !DataManager.isCreditCardAccount(acc.id));
+        return nonCreditAccounts.reduce((sum, acc) => sum + acc.balance, 0);
     },
     
     getMonthlyIncome: () => {
         return appData.transactions
-            .filter(t => t.amount > 0 && t.category !== 'Loan')
+            .filter(t => t.amount > 0 && t.category !== 'Loan' && !DataManager.isCreditCardTransaction(t))
             .reduce((sum, t) => sum + t.amount, 0);
     },
     
     getMonthlyExpenses: () => {
         return Math.abs(appData.transactions
-            .filter(t => t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer')
+            .filter(t => t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer' && !DataManager.isCreditCardTransaction(t))
             .reduce((sum, t) => sum + t.amount, 0));
     },
 
@@ -203,6 +223,7 @@ const DataManager = {
         let pastIncome = 0, pastExpense = 0, pastNet = 0, pastMoney = 0;
 
         appData.transactions.forEach(t => {
+            if (DataManager.isCreditCardTransaction(t)) return;
             const d = new Date(t.date);
             if (d >= thirtyDaysAgo) {
                 if (t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer') currentIncome += t.amount;
@@ -267,7 +288,11 @@ const DataManager = {
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > now) return false;
-                    if (targetAccountId !== null && t.accountId !== targetAccountId) return false;
+                    if (targetAccountId !== null) {
+                        if (t.accountId !== targetAccountId) return false;
+                    } else if (DataManager.isCreditCardTransaction(t)) {
+                        return false;
+                    }
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
@@ -285,6 +310,7 @@ const DataManager = {
         if (type === 'networth') {
             runningValue = DataManager.getNetWorth();
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startDate && t.category !== 'Loan' && t.category !== 'Transfer') {
                     runningValue -= t.amount;
@@ -293,6 +319,7 @@ const DataManager = {
         } else {
             runningValue = DataManager.getMoneyInHand();
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startDate && t.category !== 'Transfer') {
                     runningValue -= t.amount;
@@ -304,6 +331,7 @@ const DataManager = {
         const uniqueDates = [...new Set(
             appData.transactions
                 .filter(t => {
+                    if (DataManager.isCreditCardTransaction(t)) return false;
                     const td = new Date(t.date);
                     return td >= startDate && td <= now;
                 })
@@ -317,6 +345,7 @@ const DataManager = {
             endOfDay.setHours(23, 59, 59, 999);
 
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startOfDay && td <= endOfDay) {
                     if (type === 'networth' && t.category !== 'Loan' && t.category !== 'Transfer') runningValue += t.amount;
@@ -345,6 +374,7 @@ const DataManager = {
             labels.forEach(label => {
                 const sum = appData.transactions
                     .filter(t => {
+                        if (DataManager.isCreditCardTransaction(t)) return false;
                         const td = new Date(t.date);
                         const tLabel = td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
                         if (tLabel !== label) return false;
@@ -361,6 +391,7 @@ const DataManager = {
             let runningValue = 0;
             appData.transactions
                 .filter(t => {
+                    if (DataManager.isCreditCardTransaction(t)) return false;
                     const td = new Date(t.date);
                     if (td >= startMonth) return false;
                     if (type === 'networth') return t.category !== 'Loan' && t.category !== 'Transfer';
@@ -371,6 +402,7 @@ const DataManager = {
             labels.forEach(label => {
                 appData.transactions
                     .filter(t => {
+                        if (DataManager.isCreditCardTransaction(t)) return false;
                         const td = new Date(t.date);
                         const tLabel = td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
                         if (tLabel !== label) return false;
@@ -449,7 +481,11 @@ const DataManager = {
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > endDate) return false;
-                    if (targetAccountId !== null && t.accountId !== targetAccountId) return false;
+                    if (targetAccountId !== null) {
+                        if (t.accountId !== targetAccountId) return false;
+                    } else if (DataManager.isCreditCardTransaction(t)) {
+                        return false;
+                    }
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
@@ -467,12 +503,14 @@ const DataManager = {
         if (type === 'networth') {
             runningValue = DataManager.getNetWorth();
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startDate && t.category !== 'Loan' && t.category !== 'Transfer') runningValue -= t.amount;
             });
         } else {
             runningValue = DataManager.getMoneyInHand();
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startDate && t.category !== 'Transfer') runningValue -= t.amount;
             });
@@ -480,7 +518,11 @@ const DataManager = {
 
         const uniqueDates = [...new Set(
             appData.transactions
-                .filter(t => { const td = new Date(t.date); return td >= startDate && td <= endDate; })
+                .filter(t => {
+                    if (DataManager.isCreditCardTransaction(t)) return false;
+                    const td = new Date(t.date);
+                    return td >= startDate && td <= endDate;
+                })
                 .map(t => t.date)
         )].sort();
 
@@ -490,6 +532,7 @@ const DataManager = {
             const startOfDay = new Date(dateStr); startOfDay.setHours(0, 0, 0, 0);
             const endOfDay = new Date(dateStr); endOfDay.setHours(23, 59, 59, 999);
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startOfDay && td <= endOfDay) {
                     if (type === 'networth' && t.category !== 'Loan' && t.category !== 'Transfer') runningValue += t.amount;
@@ -507,7 +550,7 @@ const DataManager = {
         const sorted = [...appData.transactions]
             .filter(t => t.category !== 'Transfer')
             .sort((a, b) => {
-                const dateDiff = new Date(a.date) - new Date(b.date);
+                const dateDiff = new Date(b.date) - new Date(a.date);
                 if (dateDiff !== 0) return dateDiff;
                 return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
             })
@@ -541,11 +584,13 @@ const DataManager = {
     },
 
     getDashboardTransactions: (limit = null) => {
-        const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement').sort((a, b) => {
-            const dateDiff = new Date(b.date) - new Date(a.date);
-            if (dateDiff !== 0) return dateDiff;
-            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-        });
+        const sorted = [...appData.transactions]
+            .filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && !DataManager.isCreditCardTransaction(t))
+            .sort((a, b) => {
+                const dateDiff = new Date(b.date) - new Date(a.date);
+                if (dateDiff !== 0) return dateDiff;
+                return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+            });
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
@@ -1602,7 +1647,8 @@ const CreditCardManager = {
         if (isNaN(payAmount) || payAmount <= 0) return false;
 
         const txDate = date || DataManager.getLocalDateString();
-        const description = note ? `${card.name} Payment (${note})` : `Payment to ${card.name} (···${card.last4})`;
+        const baseDescription = `Payment to ${card.name} (···${card.last4})`;
+        const description = note ? `${baseDescription} (${note})` : baseDescription;
 
         const paymentTx = {
             date: txDate,

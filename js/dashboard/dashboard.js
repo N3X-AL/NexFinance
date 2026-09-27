@@ -734,13 +734,13 @@ Views.dashboard = () => {
                         <span class="material-icons-round card-action" onclick="app.navigate('accounts')">arrow_forward</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 16px;">
-                        ${appData.accounts.slice(0, 3).map(acc => `
+                        ${(appData.accounts || []).filter(acc => !DataManager.isCreditCardAccount(acc.id)).slice(0, 3).map(acc => `
                             <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-light);">
                                 <div style="display: flex; align-items: center; gap: 12px;">
                                     <div style="width: 10px; height: 10px; border-radius: var(--radius-full); background: ${acc.color}; box-shadow: 0 0 8px ${acc.color}80;"></div>
                                     <div>
-                                        <div style="font-weight: 500;">${acc.name}</div>
-                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">${acc.type}</div>
+                                        <div style="font-weight: 500;">${DataManager.escapeHtml(acc.name)}</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">${DataManager.escapeHtml(acc.type)}</div>
                                     </div>
                                 </div>
                                 <div style="font-weight: 600;">${DataManager.formatCurrency(acc.balance)}</div>

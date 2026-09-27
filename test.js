@@ -367,5 +367,79 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(remainingCardTx.length === 0, "All transactions linked to deleted card must be removed");
     console.log("✔ Deleting credit card cascading transaction cleanup test passed!");
 
+    // Test 22: recordCardPayment preserves "Payment to [Card] (···last4)" prefix with note
+    const testCard = global.CreditCardManager.saveCreditCard({
+        name: 'Sapphire Preferred',
+        bank: 'Chase',
+        last4: '5566',
+        creditLimit: 5000,
+        apr: 24.99,
+        billingCycleDay: 15,
+        gracePeriodDays: 25
+    });
+    const checkingAcc2 = { id: 8881, name: 'Main Checking', type: 'Checking', balance: 5000 };
+    global.appData.accounts.push(checkingAcc2);
+    global.CreditCardManager.recordCardPayment({
+        fromAccountId: checkingAcc2.id,
+        cardId: testCard.id,
+        amount: 250,
+        date: '2026-09-10',
+        note: 'Statement Balance'
+    });
+    const paymentTxRecord = global.appData.transactions.find(t => t.targetCardId === testCard.id && t.amount === -250);
+    assert(paymentTxRecord, "Payment transaction must be recorded");
+    assert(paymentTxRecord.merchant.startsWith('Payment to Sapphire Preferred (···5566)'), "Merchant description must preserve the Payment to [Card] (···last4) prefix");
+    assert(paymentTxRecord.merchant === 'Payment to Sapphire Preferred (···5566) (Statement Balance)', "Merchant description must append the note in parentheses");
+    console.log("✔ recordCardPayment note formatting test passed!");
+
+    // Test 23: Dashboard metrics exclude credit cards and credit card transactions
+    const initialMoneyInHand = global.DataManager.getMoneyInHand();
+    const initialNetWorth = global.DataManager.getNetWorth();
+    const initialExpenses = global.DataManager.getMonthlyExpenses();
+    const initialIncome = global.DataManager.getMonthlyIncome();
+
+    // Verify checking account is included in money in hand
+    assert(initialMoneyInHand >= 4750, "Money in hand must include checking account");
+    // Verify credit card account balance (debt) does NOT reduce money in hand
+    const cardAcc = global.DataManager.getAccountById(testCard.accountId);
+    assert(cardAcc && cardAcc.balance === 250, "Credit card account exists");
+    // Simulate debt on card
+    cardAcc.balance = -1500;
+    const moneyInHandAfterCardDebt = global.DataManager.getMoneyInHand();
+    assert(moneyInHandAfterCardDebt === initialMoneyInHand, "Money in hand must NOT be reduced by credit card debt");
+
+    // Add a retail purchase on the credit card
+    const cardPurchaseTx = {
+        id: 7771,
+        date: '2026-09-12',
+        merchant: 'Best Buy',
+        category: 'Electronics',
+        amount: -800,
+        accountId: testCard.accountId,
+        status: 'Completed'
+    };
+    global.DataManager.addTransaction(cardPurchaseTx);
+    const expensesAfterCardPurchase = global.DataManager.getMonthlyExpenses();
+    assert(expensesAfterCardPurchase === initialExpenses, "Dashboard monthly expenses must NOT include credit card purchases");
+
+    // Add a credit card refund
+    const cardRefundTx = {
+        id: 7772,
+        date: '2026-09-14',
+        merchant: 'Refund / Credit to Sapphire Preferred (···5566)',
+        category: 'Credit Card',
+        amount: 200,
+        accountId: testCard.accountId,
+        status: 'Completed'
+    };
+    global.DataManager.addTransaction(cardRefundTx);
+    const incomeAfterCardRefund = global.DataManager.getMonthlyIncome();
+    assert(incomeAfterCardRefund === initialIncome, "Dashboard monthly income must NOT include credit card refunds");
+
+    // Verify dashboard recent transactions exclude credit card transactions
+    const dashboardTxs = global.DataManager.getDashboardTransactions();
+    assert(!dashboardTxs.some(t => t.id === 7771 || t.id === 7772), "Dashboard transactions must exclude credit card transactions");
+    console.log("✔ Dashboard credit card metrics exclusion test passed!");
+
     console.log("All tests passed successfully!");
 })();
