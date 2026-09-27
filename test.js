@@ -331,5 +331,41 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(customMetrics.cashAdvanceApr === 29.99, "Cash advance APR should be 29.99%");
     console.log("✔ Custom configured Cash Advance fee and APR test passed!");
 
+    // Test 18: HTML escaping helper verification
+    const rawXss = '<script>alert("xss")</script>';
+    const escapedXss = global.DataManager.escapeHtml(rawXss);
+    assert(escapedXss === '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;', "escapeHtml should escape <, >, and quotes");
+    const rawQuotes = "Chase 'Freedom' & Co.";
+    const escapedQuotes = global.DataManager.escapeHtml(rawQuotes);
+    assert(escapedQuotes === 'Chase &#39;Freedom&#39; &amp; Co.', "escapeHtml should escape single quotes and ampersands");
+    console.log("✔ HTML escaping helper verification test passed!");
+
+    // Test 19: Timezone local date parsing verification
+    const parsedLocal = global.DataManager.parseLocalDate('2026-09-16');
+    assert(parsedLocal.getFullYear() === 2026, "parseLocalDate year should be 2026");
+    assert(parsedLocal.getMonth() === 8, "parseLocalDate month should be 8 (September)");
+    assert(parsedLocal.getDate() === 16, "parseLocalDate day should be 16");
+    console.log("✔ Timezone local date parsing verification test passed!");
+
+    // Test 20: syncWithAccounts filters out non-credit accounts
+    const fakeCheckingAcc = { id: 9991, name: 'Fake Checking', type: 'Checking', balance: 1000 };
+    global.appData.accounts.push(fakeCheckingAcc);
+    global.appData.creditCards.push({ id: 9992, accountId: fakeCheckingAcc.id, name: 'Orphan Card' });
+    global.CreditCardManager.syncWithAccounts();
+    assert(!global.appData.creditCards.some(c => c.id === 9992), "Cards linked to non-credit accounts must be filtered out");
+    console.log("✔ syncWithAccounts non-credit account filtering test passed!");
+
+    // Test 21: Deleting a card cascades and deletes associated transactions
+    const txCountBeforeDelete = global.appData.transactions.length;
+    const cardTxCount = global.appData.transactions.filter(t => t.accountId === customCard.accountId || t.targetCardId === customCard.id).length;
+    assert(cardTxCount > 0, "There should be transactions recorded for customCard");
+    const deleteSuccess = global.CreditCardManager.deleteCreditCard(customCard.id);
+    assert(deleteSuccess === true, "deleteCreditCard should return true");
+    assert(!global.appData.creditCards.some(c => c.id === customCard.id), "customCard should be removed from creditCards");
+    assert(!global.appData.accounts.some(a => a.id === customCard.accountId), "Linked account should be removed from accounts");
+    const remainingCardTx = global.appData.transactions.filter(t => t.accountId === customCard.accountId || t.targetCardId === customCard.id);
+    assert(remainingCardTx.length === 0, "All transactions linked to deleted card must be removed");
+    console.log("✔ Deleting credit card cascading transaction cleanup test passed!");
+
     console.log("All tests passed successfully!");
 })();

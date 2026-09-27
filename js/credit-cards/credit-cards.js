@@ -142,7 +142,7 @@ Views['credit-cards'] = () => {
                                 style="padding: 8px 16px; font-size: 13px; white-space: nowrap; border-radius: var(--radius-full);"
                                 onclick="CreditCardsView.setActiveCardId(${c.id})">
                             <span class="material-icons-round" style="font-size: 16px;">credit_card</span>
-                            ${c.name} (···${c.last4})
+                            ${DataManager.escapeHtml(c.name)} (···${DataManager.escapeHtml(c.last4)})
                         </button>
                     `;
                 }).join('')}
@@ -168,7 +168,7 @@ Views['credit-cards'] = () => {
                 <div class="virtual-card-container animate-slide-up" style="background: ${CreditCardsView.getThemeGradient(activeCard.colorTheme)};">
                     <div class="virtual-card-glass"></div>
                     <div class="virtual-card-top">
-                        <div class="virtual-card-bank">${activeCard.bank || 'Credit Card'}</div>
+                        <div class="virtual-card-bank">${DataManager.escapeHtml(activeCard.bank || 'Credit Card')}</div>
                         <div class="virtual-card-contactless">
                             <span class="material-icons-round" style="font-size: 20px;">contactless</span>
                         </div>
@@ -177,13 +177,13 @@ Views['credit-cards'] = () => {
                     <div class="virtual-card-chip"></div>
 
                     <div class="virtual-card-number">
-                        •••• •••• •••• ${activeCard.last4 || '0000'}
+                        •••• •••• •••• ${DataManager.escapeHtml(activeCard.last4 || '0000')}
                     </div>
 
                     <div class="virtual-card-bottom">
                         <div>
                             <div class="virtual-card-sublabel">CARDHOLDER</div>
-                            <div class="virtual-card-holder">${activeCard.name}</div>
+                            <div class="virtual-card-holder">${DataManager.escapeHtml(activeCard.name)}</div>
                         </div>
                         <div style="text-align: right;">
                             <div class="virtual-card-sublabel">LIMIT</div>
@@ -381,7 +381,7 @@ Views['credit-cards'] = () => {
         <div class="card animate-slide-up" style="padding: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
                 <div>
-                    <h3 style="font-size: 16px; font-weight: 600;">Activity on ${activeCard.name}</h3>
+                    <h3 style="font-size: 16px; font-weight: 600;">Activity on ${DataManager.escapeHtml(activeCard.name)}</h3>
                     <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
                         Showing purchases and bill payment credits (${metrics.cardTransactions.length} recorded)
                     </p>

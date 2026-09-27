@@ -724,6 +724,30 @@ const DataManager = {
         return `${year}-${month}-${day}`;
     },
 
+    parseLocalDate: (dateStr) => {
+        if (!dateStr) return new Date();
+        if (dateStr instanceof Date) return dateStr;
+        const str = String(dateStr).trim();
+        const parts = str.split('-');
+        if (parts.length === 3 && parts[0].length === 4) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const d = parseInt(parts[2], 10);
+            return new Date(y, m, d, 12, 0, 0);
+        }
+        return new Date(dateStr);
+    },
+
+    escapeHtml: (str) => {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
     addTransaction: (transaction) => {
         if (transaction.category) {
             transaction.category = transaction.category.trim();
@@ -1241,8 +1265,8 @@ const CreditCardManager = {
             }
         });
 
-        // Remove cards whose linked account no longer exists
-        appData.creditCards = appData.creditCards.filter(c => appData.accounts.some(a => a.id === c.accountId));
+        // Remove cards whose linked account no longer exists or is no longer of type 'Credit'
+        appData.creditCards = appData.creditCards.filter(c => appData.accounts.some(a => a.id === c.accountId && a.type === 'Credit'));
         return appData.creditCards;
     },
 
@@ -1330,11 +1354,12 @@ const CreditCardManager = {
         if (cardIndex !== -1) {
             const card = appData.creditCards[cardIndex];
             appData.creditCards.splice(cardIndex, 1);
-            // Also delete linked account
-            const accIdx = appData.accounts.findIndex(a => a.id === card.accountId);
-            if (accIdx !== -1) {
-                appData.accounts.splice(accIdx, 1);
+            // Delegate account and transaction deletion to DataManager.deleteAccount
+            if (card.accountId) {
+                DataManager.deleteAccount(card.accountId);
             }
+            // Remove any remaining orphaned transactions tagged with targetCardId
+            appData.transactions = (appData.transactions || []).filter(t => t.targetCardId !== cardId);
             DataManager.saveData();
             return true;
         }
@@ -1423,6 +1448,8 @@ const CreditCardManager = {
         const cashAdvanceDailyRate = cashAdvanceApr > 0 ? (cashAdvanceApr / 100) / 365 : 0;
         const cashAdvanceFeeRate = ((card.cashAdvanceFee !== undefined && !isNaN(parseFloat(card.cashAdvanceFee))) ? parseFloat(card.cashAdvanceFee) : 3.0) / 100;
 
+        let priorCashAdvances = 0;
+
         (appData.transactions || []).forEach(t => {
             const isCardExpense = t.accountId === card.accountId && t.amount < 0;
             const isCardPayment = (t.toAccountId === card.accountId && !t.isCashAdvance) ||
@@ -1432,7 +1459,7 @@ const CreditCardManager = {
 
             if (isCardExpense || isCardPayment) {
                 cardTransactions.push(t);
-                const tDate = new Date(t.date);
+                const tDate = DataManager.parseLocalDate(t.date);
                 const tTime = tDate.getTime();
                 if (tTime >= cycleStartMs && tTime <= cycleEndMs) {
                     if (isCardExpense) {
@@ -1446,6 +1473,8 @@ const CreditCardManager = {
                     } else if (isCardPayment) {
                         cyclePayments += Math.abs(t.amount);
                     }
+                } else if (tTime < cycleStartMs && isCardExpense && t.isCashAdvance) {
+                    priorCashAdvances += Math.abs(t.amount);
                 }
             }
         });
@@ -1453,15 +1482,25 @@ const CreditCardManager = {
         // Carried balance from prior statement (unpaid balance before current cycle)
         const regularPurchases = Math.max(0, cyclePurchases - cashAdvancePurchases);
         const priorUnpaid = Math.max(0, totalOutstanding - cyclePurchases + cyclePayments);
-        const isGracePeriodActive = priorUnpaid <= 0.01;
+        const carriedCashAdvance = Math.min(priorUnpaid, priorCashAdvances);
+        const carriedRegularPurchases = Math.max(0, priorUnpaid - carriedCashAdvance);
+        const isGracePeriodActive = carriedRegularPurchases <= 0.01;
 
-        // Estimated Interest calculation using Average Daily Balance + Immediate Cash Advance interest & fees
-        let estimatedInterest = cashAdvanceInterest + cashAdvanceFees;
-        if (!isGracePeriodActive && apr > 0) {
-            const cycleDays = Math.max(28, Math.min(31, Math.round((cycleEndMs - cycleStartMs) / (24 * 60 * 60 * 1000))));
-            const avgDailyBalance = priorUnpaid + (regularPurchases * 0.5);
-            estimatedInterest += avgDailyBalance * dailyRate * cycleDays;
+        const cycleDays = Math.max(28, Math.min(31, Math.round((cycleEndMs - cycleStartMs) / (24 * 60 * 60 * 1000))));
+
+        // Cash advances accrue interest immediately with zero grace period
+        let carriedCashAdvanceInterest = 0;
+        if (carriedCashAdvance > 0 && cashAdvanceDailyRate > 0) {
+            carriedCashAdvanceInterest = carriedCashAdvance * cashAdvanceDailyRate * cycleDays;
         }
+
+        let regularInterest = 0;
+        if (!isGracePeriodActive && apr > 0) {
+            const avgDailyRegularBalance = carriedRegularPurchases + (regularPurchases * 0.5);
+            regularInterest = avgDailyRegularBalance * dailyRate * cycleDays;
+        }
+
+        let estimatedInterest = cashAdvanceFees + cashAdvanceInterest + carriedCashAdvanceInterest + regularInterest;
 
         const projectedStatementTotal = Math.max(0, totalOutstanding + estimatedInterest);
 

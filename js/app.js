@@ -299,9 +299,9 @@ class App {
     }
 
     showAddTransactionModal() {
-        const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${DataManager.escapeHtml(a.name)} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
         const cards = (typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCards() : [];
-        const cardOptions = cards.map(c => `<option value="${c.id}">${c.name} (${c.bank} ···${c.last4})</option>`).join('');
+        const cardOptions = cards.map(c => `<option value="${c.id}">${DataManager.escapeHtml(c.name)} (${DataManager.escapeHtml(c.bank)} ···${DataManager.escapeHtml(c.last4)})</option>`).join('');
         
         const content = `
             <form id="add-transaction-form">
@@ -335,8 +335,8 @@ class App {
                     <label class="form-label">Category</label>
                     <input type="text" id="t-category" class="form-control" placeholder="Search or select a category" required autocomplete="off">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Account</label>
+                <div class="form-group" id="t-account-group">
+                    <label class="form-label" id="t-account-label">Account</label>
                     <select id="t-account" class="form-control">
                         ${accountOptions}
                     </select>
@@ -358,6 +358,7 @@ class App {
             const categoryVal = document.getElementById('t-category').value.trim();
             const isCC = categoryVal.toLowerCase() === 'credit card';
             let merchantVal = document.getElementById('t-merchant').value;
+            let accountIdVal = parseInt(document.getElementById('t-account').value);
             let toAccountId = null;
             let targetCardId = null;
 
@@ -365,11 +366,17 @@ class App {
                 const cardSelect = document.getElementById('t-card-select');
                 const selectedCard = CreditCardManager.getCreditCardById(cardSelect ? cardSelect.value : null);
                 if (selectedCard) {
-                    merchantVal = (type === 'income')
-                        ? `Refund / Credit to ${selectedCard.name} (···${selectedCard.last4})`
-                        : `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
-                    toAccountId = selectedCard.accountId;
                     targetCardId = selectedCard.id;
+                    if (type === 'income') {
+                        // Refund/credit: credits the credit card account directly without touching checking account
+                        merchantVal = `Refund / Credit to ${selectedCard.name} (···${selectedCard.last4})`;
+                        accountIdVal = selectedCard.accountId;
+                        toAccountId = null;
+                    } else {
+                        // Payment: paid from selected bank account into the credit card account
+                        merchantVal = `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
+                        toAccountId = selectedCard.accountId;
+                    }
                 }
             }
             
@@ -378,7 +385,7 @@ class App {
                 merchant: merchantVal,
                 category: categoryVal,
                 amount: amount,
-                accountId: parseInt(document.getElementById('t-account').value),
+                accountId: accountIdVal,
                 toAccountId: toAccountId,
                 targetCardId: targetCardId,
                 status: 'Completed'
@@ -392,7 +399,7 @@ class App {
         });
 
         // Dynamic morphing: toggle merchant vs card dropdown based on category
-        const setupCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId, typeSelectId, cardLabelId, cardHelpId) => {
+        const setupCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId, typeSelectId, cardLabelId, cardHelpId, accountGroupId, accountLabelId) => {
             const catInput = document.getElementById(catInputId);
             const merchantGroup = document.getElementById(merchantGroupId);
             const cardGroup = document.getElementById(cardGroupId);
@@ -400,12 +407,28 @@ class App {
             const typeSelect = document.getElementById(typeSelectId);
             const cardLabel = document.getElementById(cardLabelId);
             const cardHelp = document.getElementById(cardHelpId);
+            const accountGroup = document.getElementById(accountGroupId);
+            const accountLabel = document.getElementById(accountLabelId);
 
             const updateCardLabels = () => {
                 if (!typeSelect || !cardLabel || !cardHelp) return;
                 const isIncome = typeSelect.value === 'income';
                 cardLabel.textContent = isIncome ? 'Credit Card Receiving Refund / Credit' : 'Credit Card to Pay';
                 cardHelp.textContent = isIncome ? 'This refund or credit will reduce the balance on the selected card.' : 'This payment will be credited directly to the selected card.';
+                if (accountGroup && accountLabel) {
+                    const isCC = catInput && catInput.value.trim().toLowerCase() === 'credit card';
+                    if (isCC && cards.length > 0) {
+                        if (isIncome) {
+                            accountGroup.style.display = 'none';
+                        } else {
+                            accountGroup.style.display = 'block';
+                            accountLabel.textContent = 'Pay From Account';
+                        }
+                    } else {
+                        accountGroup.style.display = 'block';
+                        accountLabel.textContent = 'Account';
+                    }
+                }
             };
 
             const checkCategory = () => {
@@ -420,6 +443,8 @@ class App {
                     if (merchantGroup) merchantGroup.style.display = 'block';
                     if (cardGroup) cardGroup.style.display = 'none';
                     if (merchantInput) merchantInput.required = true;
+                    if (accountGroup) accountGroup.style.display = 'block';
+                    if (accountLabel) accountLabel.textContent = 'Account';
                 }
             };
 
@@ -435,7 +460,7 @@ class App {
             return checkCategory;
         };
 
-        setupCategoryListener('t-category', 't-merchant-group', 't-card-selector-group', 't-merchant', 't-type', 't-card-label', 't-card-help');
+        setupCategoryListener('t-category', 't-merchant-group', 't-card-selector-group', 't-merchant', 't-type', 't-card-label', 't-card-help', 't-account-group', 't-account-label');
 
         // Initialize Combo Box for category
         setTimeout(() => {
@@ -454,10 +479,10 @@ class App {
         const cards = (typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCards() : [];
         const isInitialCC = (tx.category && tx.category.toLowerCase() === 'credit card');
         
-        const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === tx.accountId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === tx.accountId ? 'selected' : ''}>${DataManager.escapeHtml(a.name)} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
         const cardOptions = cards.map(c => {
-            const isSelected = (tx.targetCardId === c.id) || (tx.toAccountId === c.accountId);
-            return `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.name} (${c.bank} ···${c.last4})</option>`;
+            const isSelected = (tx.targetCardId === c.id) || (tx.toAccountId === c.accountId) || (tx.accountId === c.accountId && isInitialCC);
+            return `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${DataManager.escapeHtml(c.name)} (${DataManager.escapeHtml(c.bank)} ···${DataManager.escapeHtml(c.last4)})</option>`;
         }).join('');
         
         const content = `
@@ -475,7 +500,7 @@ class App {
                 </div>
                 <div class="form-group" id="et-merchant-group" style="${isInitialCC && cards.length > 0 ? 'display: none;' : ''}">
                     <label class="form-label">Merchant / Description</label>
-                    <input type="text" id="et-merchant" class="form-control" value="${tx.merchant}" ${isInitialCC && cards.length > 0 ? '' : 'required'}>
+                    <input type="text" id="et-merchant" class="form-control" value="${DataManager.escapeHtml(tx.merchant)}" ${isInitialCC && cards.length > 0 ? '' : 'required'}>
                 </div>
                 <div class="form-group" id="et-card-selector-group" style="${isInitialCC && cards.length > 0 ? 'display: block;' : 'display: none;'}">
                     <label class="form-label" id="et-card-label">${!isExpense ? 'Credit Card Receiving Refund / Credit' : 'Credit Card to Pay'}</label>
@@ -490,10 +515,10 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Category</label>
-                    <input type="text" id="et-category" class="form-control" value="${tx.category}" placeholder="Search or select a category" required autocomplete="off">
+                    <input type="text" id="et-category" class="form-control" value="${DataManager.escapeHtml(tx.category)}" placeholder="Search or select a category" required autocomplete="off">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Account</label>
+                <div class="form-group" id="et-account-group" style="${isInitialCC && !isExpense ? 'display: none;' : ''}">
+                    <label class="form-label" id="et-account-label">${isInitialCC && isExpense ? 'Pay From Account' : 'Account'}</label>
                     <select id="et-account" class="form-control">
                         ${accountOptions}
                     </select>
@@ -515,6 +540,7 @@ class App {
             const categoryVal = document.getElementById('et-category').value.trim();
             const isCC = categoryVal.toLowerCase() === 'credit card';
             let merchantVal = document.getElementById('et-merchant').value;
+            let accountIdVal = parseInt(document.getElementById('et-account').value);
             let toAccountId = tx.toAccountId || null;
             let targetCardId = tx.targetCardId || null;
 
@@ -522,11 +548,15 @@ class App {
                 const cardSelect = document.getElementById('et-card-select');
                 const selectedCard = CreditCardManager.getCreditCardById(cardSelect ? cardSelect.value : null);
                 if (selectedCard) {
-                    merchantVal = (type === 'income')
-                        ? `Refund / Credit to ${selectedCard.name} (···${selectedCard.last4})`
-                        : `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
-                    toAccountId = selectedCard.accountId;
                     targetCardId = selectedCard.id;
+                    if (type === 'income') {
+                        merchantVal = `Refund / Credit to ${selectedCard.name} (···${selectedCard.last4})`;
+                        accountIdVal = selectedCard.accountId;
+                        toAccountId = null;
+                    } else {
+                        merchantVal = `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
+                        toAccountId = selectedCard.accountId;
+                    }
                 }
             } else if (!isCC) {
                 // If category was changed away from Credit Card, clear toAccountId/targetCardId if it was a CC payment
@@ -541,7 +571,7 @@ class App {
                 merchant: merchantVal,
                 category: categoryVal,
                 amount: amount,
-                accountId: parseInt(document.getElementById('et-account').value),
+                accountId: accountIdVal,
                 toAccountId: toAccountId,
                 targetCardId: targetCardId,
                 status: tx.status
@@ -553,7 +583,7 @@ class App {
             return true;
         });
 
-        const setupEditCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId, typeSelectId, cardLabelId, cardHelpId) => {
+        const setupEditCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId, typeSelectId, cardLabelId, cardHelpId, accountGroupId, accountLabelId) => {
             const catInput = document.getElementById(catInputId);
             const merchantGroup = document.getElementById(merchantGroupId);
             const cardGroup = document.getElementById(cardGroupId);
@@ -561,12 +591,28 @@ class App {
             const typeSelect = document.getElementById(typeSelectId);
             const cardLabel = document.getElementById(cardLabelId);
             const cardHelp = document.getElementById(cardHelpId);
+            const accountGroup = document.getElementById(accountGroupId);
+            const accountLabel = document.getElementById(accountLabelId);
 
             const updateCardLabels = () => {
                 if (!typeSelect || !cardLabel || !cardHelp) return;
                 const isIncome = typeSelect.value === 'income';
                 cardLabel.textContent = isIncome ? 'Credit Card Receiving Refund / Credit' : 'Credit Card to Pay';
                 cardHelp.textContent = isIncome ? 'This refund or credit will reduce the balance on the selected card.' : 'This payment will be credited directly to the selected card.';
+                if (accountGroup && accountLabel) {
+                    const isCC = catInput && catInput.value.trim().toLowerCase() === 'credit card';
+                    if (isCC && cards.length > 0) {
+                        if (isIncome) {
+                            accountGroup.style.display = 'none';
+                        } else {
+                            accountGroup.style.display = 'block';
+                            accountLabel.textContent = 'Pay From Account';
+                        }
+                    } else {
+                        accountGroup.style.display = 'block';
+                        accountLabel.textContent = 'Account';
+                    }
+                }
             };
 
             const checkCategory = () => {
@@ -581,6 +627,8 @@ class App {
                     if (merchantGroup) merchantGroup.style.display = 'block';
                     if (cardGroup) cardGroup.style.display = 'none';
                     if (merchantInput) merchantInput.required = true;
+                    if (accountGroup) accountGroup.style.display = 'block';
+                    if (accountLabel) accountLabel.textContent = 'Account';
                 }
             };
 
@@ -595,7 +643,7 @@ class App {
             }
         };
 
-        setupEditCategoryListener('et-category', 'et-merchant-group', 'et-card-selector-group', 'et-merchant', 'et-type', 'et-card-label', 'et-card-help');
+        setupEditCategoryListener('et-category', 'et-merchant-group', 'et-card-selector-group', 'et-merchant', 'et-type', 'et-card-label', 'et-card-help', 'et-account-group', 'et-account-label');
 
         setTimeout(() => {
             if (window.ComboBox) {
@@ -960,15 +1008,15 @@ class App {
             <form id="edit-credit-card-form">
                 <div class="form-group">
                     <label class="form-label">Card Name</label>
-                    <input type="text" id="ecc-name" class="form-control" value="${card.name}" required>
+                    <input type="text" id="ecc-name" class="form-control" value="${DataManager.escapeHtml(card.name)}" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Issuing Bank</label>
-                    <input type="text" id="ecc-bank" class="form-control" value="${card.bank || ''}" required>
+                    <input type="text" id="ecc-bank" class="form-control" value="${DataManager.escapeHtml(card.bank || '')}" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Card Number (Last 4 digits)</label>
-                    <input type="text" id="ecc-last4" class="form-control" value="${card.last4 || '0000'}" maxlength="4" pattern="[0-9]{4}" required>
+                    <input type="text" id="ecc-last4" class="form-control" value="${DataManager.escapeHtml(card.last4 || '0000')}" maxlength="4" pattern="[0-9]{4}" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Credit Limit</label>
