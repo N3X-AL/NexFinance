@@ -321,11 +321,11 @@ class App {
                     <input type="text" id="t-merchant" class="form-control" placeholder="e.g. Amazon" required>
                 </div>
                 <div class="form-group" id="t-card-selector-group" style="display: none;">
-                    <label class="form-label">Credit Card to Pay</label>
+                    <label class="form-label" id="t-card-label">Credit Card to Pay</label>
                     <select id="t-card-select" class="form-control">
                         ${cardOptions || '<option value="">No Credit Cards configured</option>'}
                     </select>
-                    <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">This payment will be credited directly to the selected card.</p>
+                    <p id="t-card-help" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">This payment will be credited directly to the selected card.</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
@@ -365,7 +365,9 @@ class App {
                 const cardSelect = document.getElementById('t-card-select');
                 const selectedCard = CreditCardManager.getCreditCardById(cardSelect ? cardSelect.value : null);
                 if (selectedCard) {
-                    merchantVal = `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
+                    merchantVal = (type === 'income')
+                        ? `Refund / Credit to ${selectedCard.name} (···${selectedCard.last4})`
+                        : `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
                     toAccountId = selectedCard.accountId;
                     targetCardId = selectedCard.id;
                 }
@@ -390,11 +392,21 @@ class App {
         });
 
         // Dynamic morphing: toggle merchant vs card dropdown based on category
-        const setupCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId) => {
+        const setupCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId, typeSelectId, cardLabelId, cardHelpId) => {
             const catInput = document.getElementById(catInputId);
             const merchantGroup = document.getElementById(merchantGroupId);
             const cardGroup = document.getElementById(cardGroupId);
             const merchantInput = document.getElementById(merchantInputId);
+            const typeSelect = document.getElementById(typeSelectId);
+            const cardLabel = document.getElementById(cardLabelId);
+            const cardHelp = document.getElementById(cardHelpId);
+
+            const updateCardLabels = () => {
+                if (!typeSelect || !cardLabel || !cardHelp) return;
+                const isIncome = typeSelect.value === 'income';
+                cardLabel.textContent = isIncome ? 'Credit Card Receiving Refund / Credit' : 'Credit Card to Pay';
+                cardHelp.textContent = isIncome ? 'This refund or credit will reduce the balance on the selected card.' : 'This payment will be credited directly to the selected card.';
+            };
 
             const checkCategory = () => {
                 if (!catInput) return;
@@ -403,6 +415,7 @@ class App {
                     if (merchantGroup) merchantGroup.style.display = 'none';
                     if (cardGroup) cardGroup.style.display = 'block';
                     if (merchantInput) merchantInput.required = false;
+                    updateCardLabels();
                 } else {
                     if (merchantGroup) merchantGroup.style.display = 'block';
                     if (cardGroup) cardGroup.style.display = 'none';
@@ -414,10 +427,15 @@ class App {
                 catInput.addEventListener('input', checkCategory);
                 catInput.addEventListener('change', checkCategory);
             }
+            if (typeSelect) {
+                typeSelect.addEventListener('change', () => {
+                    updateCardLabels();
+                });
+            }
             return checkCategory;
         };
 
-        setupCategoryListener('t-category', 't-merchant-group', 't-card-selector-group', 't-merchant');
+        setupCategoryListener('t-category', 't-merchant-group', 't-card-selector-group', 't-merchant', 't-type', 't-card-label', 't-card-help');
 
         // Initialize Combo Box for category
         setTimeout(() => {
@@ -460,11 +478,11 @@ class App {
                     <input type="text" id="et-merchant" class="form-control" value="${tx.merchant}" ${isInitialCC && cards.length > 0 ? '' : 'required'}>
                 </div>
                 <div class="form-group" id="et-card-selector-group" style="${isInitialCC && cards.length > 0 ? 'display: block;' : 'display: none;'}">
-                    <label class="form-label">Credit Card to Pay</label>
+                    <label class="form-label" id="et-card-label">${!isExpense ? 'Credit Card Receiving Refund / Credit' : 'Credit Card to Pay'}</label>
                     <select id="et-card-select" class="form-control">
                         ${cardOptions || '<option value="">No Credit Cards configured</option>'}
                     </select>
-                    <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">This payment will be credited directly to the selected card.</p>
+                    <p id="et-card-help" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${!isExpense ? 'This refund or credit will reduce the balance on the selected card.' : 'This payment will be credited directly to the selected card.'}</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
@@ -504,7 +522,9 @@ class App {
                 const cardSelect = document.getElementById('et-card-select');
                 const selectedCard = CreditCardManager.getCreditCardById(cardSelect ? cardSelect.value : null);
                 if (selectedCard) {
-                    merchantVal = `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
+                    merchantVal = (type === 'income')
+                        ? `Refund / Credit to ${selectedCard.name} (···${selectedCard.last4})`
+                        : `Payment to ${selectedCard.name} (···${selectedCard.last4})`;
                     toAccountId = selectedCard.accountId;
                     targetCardId = selectedCard.id;
                 }
@@ -533,11 +553,21 @@ class App {
             return true;
         });
 
-        const setupCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId) => {
+        const setupEditCategoryListener = (catInputId, merchantGroupId, cardGroupId, merchantInputId, typeSelectId, cardLabelId, cardHelpId) => {
             const catInput = document.getElementById(catInputId);
             const merchantGroup = document.getElementById(merchantGroupId);
             const cardGroup = document.getElementById(cardGroupId);
             const merchantInput = document.getElementById(merchantInputId);
+            const typeSelect = document.getElementById(typeSelectId);
+            const cardLabel = document.getElementById(cardLabelId);
+            const cardHelp = document.getElementById(cardHelpId);
+
+            const updateCardLabels = () => {
+                if (!typeSelect || !cardLabel || !cardHelp) return;
+                const isIncome = typeSelect.value === 'income';
+                cardLabel.textContent = isIncome ? 'Credit Card Receiving Refund / Credit' : 'Credit Card to Pay';
+                cardHelp.textContent = isIncome ? 'This refund or credit will reduce the balance on the selected card.' : 'This payment will be credited directly to the selected card.';
+            };
 
             const checkCategory = () => {
                 if (!catInput) return;
@@ -546,6 +576,7 @@ class App {
                     if (merchantGroup) merchantGroup.style.display = 'none';
                     if (cardGroup) cardGroup.style.display = 'block';
                     if (merchantInput) merchantInput.required = false;
+                    updateCardLabels();
                 } else {
                     if (merchantGroup) merchantGroup.style.display = 'block';
                     if (cardGroup) cardGroup.style.display = 'none';
@@ -557,9 +588,14 @@ class App {
                 catInput.addEventListener('input', checkCategory);
                 catInput.addEventListener('change', checkCategory);
             }
+            if (typeSelect) {
+                typeSelect.addEventListener('change', () => {
+                    updateCardLabels();
+                });
+            }
         };
 
-        setupCategoryListener('et-category', 'et-merchant-group', 'et-card-selector-group', 'et-merchant');
+        setupEditCategoryListener('et-category', 'et-merchant-group', 'et-card-selector-group', 'et-merchant', 'et-type', 'et-card-label', 'et-card-help');
 
         setTimeout(() => {
             if (window.ComboBox) {
@@ -583,6 +619,10 @@ class App {
 
         const content = `
             <form id="transfer-form">
+                <div id="tf-cash-advance-alert" style="display: none; padding: 10px 14px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: var(--danger); font-size: 12px; margin-bottom: 14px; line-height: 1.4;">
+                    <strong><i class="fas fa-exclamation-triangle" style="margin-right: 4px;"></i> Cash Advance Notice:</strong>
+                    Transferring funds from a credit card is treated as a Cash Advance. It incurs an upfront fee (typically 3%) and accrues immediate interest with zero grace period.
+                </div>
                 <div class="form-group">
                     <label class="form-label">From Account</label>
                     <select id="tf-from" class="form-control" onchange="app._syncTransferAccounts()">
@@ -636,6 +676,8 @@ class App {
             this.navigate(this.currentRoute);
             return true;
         });
+
+        setTimeout(() => this._updateCashAdvanceNotice(), 10);
     }
 
     _syncTransferAccounts() {
@@ -646,6 +688,20 @@ class App {
         if (parseInt(toSelect.value) === fromId) {
             const other = appData.accounts.find(a => a.id !== fromId);
             if (other) toSelect.value = other.id;
+        }
+        this._updateCashAdvanceNotice();
+    }
+
+    _updateCashAdvanceNotice() {
+        const fromSelect = document.getElementById('tf-from');
+        const alertDiv = document.getElementById('tf-cash-advance-alert');
+        if (!fromSelect || !alertDiv) return;
+        const fromId = parseInt(fromSelect.value);
+        const fromAccount = appData.accounts.find(a => a.id === fromId);
+        if (fromAccount && fromAccount.type === 'Credit') {
+            alertDiv.style.display = 'block';
+        } else {
+            alertDiv.style.display = 'none';
         }
     }
 

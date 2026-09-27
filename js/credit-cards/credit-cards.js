@@ -295,6 +295,15 @@ Views['credit-cards'] = () => {
                             <span style="font-weight: 600; color: var(--danger);">+${DataManager.formatCurrency(metrics.cyclePurchases)}</span>
                         </div>
 
+                        ${metrics.cashAdvancePurchases > 0 ? `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-left: 12px; font-size: 12px;">
+                            <span style="color: var(--warning); display: flex; align-items: center; gap: 4px;">
+                                <span class="material-icons-round" style="font-size: 15px;">payments</span> Includes Cash Advance:
+                            </span>
+                            <span style="font-weight: 600; color: var(--warning);">${DataManager.formatCurrency(metrics.cashAdvancePurchases)} (Fee: ${DataManager.formatCurrency(metrics.cashAdvanceFees)})</span>
+                        </div>
+                        ` : ''}
+
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="color: var(--text-secondary);">Payments & Credits in this Cycle:</span>
                             <span style="font-weight: 600; color: var(--success);">${metrics.cyclePayments > 0 ? '-' : ''}${DataManager.formatCurrency(metrics.cyclePayments)}</span>
@@ -303,8 +312,8 @@ Views['credit-cards'] = () => {
                         <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-light); padding-top: 10px;">
                             <span style="display: flex; align-items: center; gap: 6px; color: var(--text-secondary);">
                                 Estimated Finance Charges / Interest:
-                                <span class="tag ${metrics.isGracePeriodActive ? 'bg-success-light text-success' : 'bg-danger-light text-danger'}" style="font-size: 10px; padding: 2px 6px;">
-                                    ${metrics.isGracePeriodActive ? 'Grace Period Active (0%)' : `APR ${activeCard.apr}%`}
+                                <span class="tag ${metrics.isGracePeriodActive && metrics.cashAdvanceInterest === 0 ? 'bg-success-light text-success' : 'bg-danger-light text-danger'}" style="font-size: 10px; padding: 2px 6px;">
+                                    ${metrics.cashAdvanceInterest > 0 ? 'Cash Advance APR (No Grace Period)' : (metrics.isGracePeriodActive ? 'Grace Period Active (0%)' : `APR ${activeCard.apr}%`)}
                                 </span>
                             </span>
                             <span style="font-weight: 600; color: ${metrics.estimatedInterest > 0 ? 'var(--danger)' : 'var(--success)'};">

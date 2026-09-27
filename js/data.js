@@ -1105,16 +1105,22 @@ const DataManager = {
         const toAccount = appData.accounts.find(a => a.id === toAccountId);
         if (!fromAccount || !toAccount || fromAccountId === toAccountId || amount <= 0) return false;
 
+        const isCashAdvance = fromAccount.type === 'Credit';
+        const prefix = isCashAdvance ? 'Cash Advance' : 'Transfer';
         const description = note ? ` (${note})` : '';
         const transferAmount = Math.abs(amount);
 
+        const card = (isCashAdvance && typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCardByAccountId(fromAccountId) : null;
+
         DataManager.addTransaction({
             date: date,
-            merchant: `Transfer: ${fromAccount.name} → ${toAccount.name}${description}`,
+            merchant: `${prefix}: ${fromAccount.name} → ${toAccount.name}${description}`,
             category: 'Transfer',
             amount: -transferAmount,
             accountId: fromAccountId,
             toAccountId: toAccountId,
+            targetCardId: card ? card.id : null,
+            isCashAdvance: isCashAdvance,
             status: 'Completed'
         });
 
@@ -1403,12 +1409,18 @@ const CreditCardManager = {
         // Current cycle transactions
         let cyclePurchases = 0;
         let cyclePayments = 0;
+        let cashAdvancePurchases = 0;
+        let cashAdvanceInterest = 0;
+        let cashAdvanceFees = 0;
         const cardTransactions = [];
+        const apr = parseFloat(card.apr) || 0;
+        const dailyRate = apr > 0 ? (apr / 100) / 365 : 0;
+        const cashAdvanceFeeRate = (parseFloat(card.cashAdvanceFee) || 3.0) / 100;
 
         (appData.transactions || []).forEach(t => {
             const isCardExpense = t.accountId === card.accountId && t.amount < 0;
-            const isCardPayment = (t.toAccountId === card.accountId) ||
-                                  (t.targetCardId === card.id) ||
+            const isCardPayment = (t.toAccountId === card.accountId && !t.isCashAdvance) ||
+                                  (t.targetCardId === card.id && !t.isCashAdvance) ||
                                   (t.accountId === card.accountId && t.amount > 0) ||
                                   (t.category && t.category.toLowerCase() === 'credit card' && (t.targetCardId === card.id || t.toAccountId === card.accountId));
 
@@ -1419,6 +1431,12 @@ const CreditCardManager = {
                 if (tTime >= cycleStartMs && tTime <= cycleEndMs) {
                     if (isCardExpense) {
                         cyclePurchases += Math.abs(t.amount);
+                        if (t.isCashAdvance) {
+                            cashAdvancePurchases += Math.abs(t.amount);
+                            const daysFromTx = Math.max(1, Math.round((cycleEndMs - tTime) / (24 * 60 * 60 * 1000)));
+                            cashAdvanceInterest += Math.abs(t.amount) * dailyRate * daysFromTx;
+                            cashAdvanceFees += Math.abs(t.amount) * cashAdvanceFeeRate;
+                        }
                     } else if (isCardPayment) {
                         cyclePayments += Math.abs(t.amount);
                     }
@@ -1427,17 +1445,16 @@ const CreditCardManager = {
         });
 
         // Carried balance from prior statement (unpaid balance before current cycle)
+        const regularPurchases = Math.max(0, cyclePurchases - cashAdvancePurchases);
         const priorUnpaid = Math.max(0, totalOutstanding - cyclePurchases + cyclePayments);
         const isGracePeriodActive = priorUnpaid <= 0.01;
 
-        // Estimated Interest calculation using Average Daily Balance
-        let estimatedInterest = 0;
-        const apr = parseFloat(card.apr) || 0;
+        // Estimated Interest calculation using Average Daily Balance + Immediate Cash Advance interest & fees
+        let estimatedInterest = cashAdvanceInterest + cashAdvanceFees;
         if (!isGracePeriodActive && apr > 0) {
-            const dailyRate = (apr / 100) / 365;
             const cycleDays = Math.max(28, Math.min(31, Math.round((cycleEndMs - cycleStartMs) / (24 * 60 * 60 * 1000))));
-            const avgDailyBalance = priorUnpaid + (cyclePurchases * 0.5);
-            estimatedInterest = avgDailyBalance * dailyRate * cycleDays;
+            const avgDailyBalance = priorUnpaid + (regularPurchases * 0.5);
+            estimatedInterest += avgDailyBalance * dailyRate * cycleDays;
         }
 
         const projectedStatementTotal = Math.max(0, totalOutstanding + estimatedInterest);
@@ -1481,6 +1498,9 @@ const CreditCardManager = {
             limit,
             cyclePurchases,
             cyclePayments,
+            cashAdvancePurchases,
+            cashAdvanceInterest,
+            cashAdvanceFees,
             priorUnpaid,
             isGracePeriodActive,
             estimatedInterest,

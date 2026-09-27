@@ -265,5 +265,50 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(ccHtml.includes('Activity on Sapphire Preferred'), "credit-cards view should contain card activity table");
     console.log("✔ Credit Cards view synchronous initial render test passed!");
 
+    // Test 15: Cash Advance via transferFunds (from credit card to checking account)
+    const todayStr = global.DataManager.getLocalDateString();
+    const checkingBeforeCA = checkingAcc.balance;
+    const cardAccBeforeCA = global.DataManager.getAccountById(createdCard.accountId).balance;
+    const caTransferSuccess = global.DataManager.transferFunds(createdCard.accountId, checkingAcc.id, 1000, todayStr, 'Emergency cash');
+    assert(caTransferSuccess === true, "transferFunds for Cash Advance should succeed");
+
+    assert(checkingAcc.balance === checkingBeforeCA + 1000, "Checking account should gain $1000 from cash advance");
+    assert(global.DataManager.getAccountById(createdCard.accountId).balance === cardAccBeforeCA - 1000, "Card balance should drop by $1000 (debt increases to 1300)");
+
+    // Verify cash advance transaction attributes
+    const caTx = global.appData.transactions.find(t => t.accountId === createdCard.accountId && t.isCashAdvance === true);
+    assert(caTx !== undefined, "Transaction should be flagged with isCashAdvance: true");
+    assert(caTx.merchant.startsWith('Cash Advance:'), "Merchant title should start with 'Cash Advance:'");
+    assert(caTx.targetCardId === createdCard.id, "Cash advance transaction should be tagged with targetCardId");
+
+    // Metrics check for cash advance fees and immediate interest
+    const metricsAfterCA = global.CreditCardManager.getCardMetrics(createdCard);
+    assert(metricsAfterCA.cashAdvancePurchases === 1000, "cashAdvancePurchases should be 1000");
+    assert(metricsAfterCA.cashAdvanceFees === 30, "cashAdvanceFees should be $30 (3% of $1000)");
+    assert(metricsAfterCA.cashAdvanceInterest > 0, "cashAdvanceInterest should be greater than 0 due to zero grace period");
+    assert(metricsAfterCA.estimatedInterest >= 30, "Estimated interest/finance charges must include at least $30 fee");
+
+    // Verify Cash Advance row renders in credit cards view
+    const ccHtmlWithCA = global.Views['credit-cards']();
+    assert(ccHtmlWithCA.includes('Includes Cash Advance:'), "View should render Cash Advance row");
+    assert(ccHtmlWithCA.includes('Cash Advance APR (No Grace Period)'), "View should indicate Cash Advance APR with no grace period");
+    console.log("✔ Cash advance transfer, fee calculation, immediate interest, and UI row test passed!");
+
+    // Test 16: Refund / Income transaction on Credit Card
+    const cardAccBeforeRefund = global.DataManager.getAccountById(createdCard.accountId).balance;
+    global.DataManager.addTransaction({
+        date: todayStr,
+        merchant: `Refund / Credit to ${createdCard.name} (···${createdCard.last4})`,
+        category: 'Credit Card',
+        amount: 200, // Income/refund
+        accountId: createdCard.accountId,
+        targetCardId: createdCard.id,
+        status: 'Completed'
+    });
+    assert(global.DataManager.getAccountById(createdCard.accountId).balance === cardAccBeforeRefund + 200, "Card balance should increase by 200 upon refund");
+    const metricsAfterRefund = global.CreditCardManager.getCardMetrics(createdCard);
+    assert(metricsAfterRefund.totalOutstanding === 1100, "Outstanding balance should reflect the $200 refund reduction");
+    console.log("✔ Credit Card refund/credit income transaction test passed!");
+
     console.log("All tests passed successfully!");
 })();
