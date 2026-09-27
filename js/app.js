@@ -1130,14 +1130,14 @@ class App {
             return;
         }
 
-        const fromOptions = bankAccounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const fromOptions = bankAccounts.map(a => `<option value="${a.id}">${DataManager.escapeHtml(a.name)} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
 
         const content = `
             <form id="pay-credit-card-form">
                 <div style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                         <span style="font-size: 13px; color: var(--text-secondary);">Paying Towards:</span>
-                        <strong style="font-size: 14px;">${card.name} (···${card.last4})</strong>
+                        <strong style="font-size: 14px;">${DataManager.escapeHtml(card.name)} (···${DataManager.escapeHtml(card.last4)})</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-size: 13px; color: var(--text-secondary);">Projected Statement Bill:</span>
@@ -1185,7 +1185,7 @@ class App {
             </form>
         `;
 
-        this.showModal(`Pay ${card.name}`, content, () => {
+        this.showModal(`Pay ${DataManager.escapeHtml(card.name)}`, content, () => {
             const form = document.getElementById('pay-credit-card-form');
             if (!form.checkValidity()) {
                 form.reportValidity();

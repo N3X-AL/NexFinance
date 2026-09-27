@@ -16,11 +16,26 @@ const Components = {
     `,
 
     transactionRow: (t) => {
-        const isTransfer = !!t.toAccountId;
+        const isTransfer = (t.category === 'Transfer') || !!t.toAccountId;
 
         if (isTransfer) {
-            const fromAccount = DataManager.getAccountById(t.accountId);
-            const toAccount = DataManager.getAccountById(t.toAccountId);
+            let fromName, toName;
+            if (t.isDecoupled) {
+                if (t.decoupledDirection === 'incoming') {
+                    fromName = `${t.deletedAccountName || 'Deleted Account'} (Deleted)`;
+                    const toAccount = DataManager.getAccountById(t.accountId);
+                    toName = toAccount ? toAccount.name : 'Unknown';
+                } else {
+                    const fromAccount = DataManager.getAccountById(t.accountId);
+                    fromName = fromAccount ? fromAccount.name : 'Unknown';
+                    toName = `${t.deletedAccountName || 'Deleted Account'} (Deleted)`;
+                }
+            } else {
+                const fromAccount = DataManager.getAccountById(t.accountId);
+                const toAccount = DataManager.getAccountById(t.toAccountId);
+                fromName = fromAccount ? fromAccount.name : 'Unknown';
+                toName = toAccount ? toAccount.name : 'Unknown';
+            }
             return `
                 <tr>
                     <td data-label="Transaction">
@@ -29,13 +44,13 @@ const Components = {
                                 <span class="material-icons-round" style="color: var(--primary)">swap_horiz</span>
                             </div>
                             <div>
-                                <div style="font-weight: 500; text-align: left;">${t.merchant}</div>
+                                <div style="font-weight: 500; text-align: left;">${DataManager.escapeHtml(t.merchant)}</div>
                                 <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; text-align: left;">${DataManager.formatDate(t.date)}</div>
                             </div>
                         </div>
                     </td>
                     <td data-label="Category"><span class="tag bg-primary-light">${t.category}</span></td>
-                    <td data-label="Account">${fromAccount ? fromAccount.name : 'Unknown'} → ${toAccount ? toAccount.name : 'Unknown'}</td>
+                    <td data-label="Account">${DataManager.escapeHtml(fromName)} → ${DataManager.escapeHtml(toName)}</td>
                     <td data-label="Amount" style="text-align: right; font-weight: 600;">
                         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px;">
                             <span>${DataManager.formatCurrency(Math.abs(t.amount))}</span>
@@ -62,20 +77,22 @@ const Components = {
                             <span class="material-icons-round" style="color: ${account ? account.color : 'var(--text-secondary)'}">${t.amount > 0 ? 'arrow_downward' : 'arrow_upward'}</span>
                         </div>
                         <div>
-                            <div style="font-weight: 500; text-align: left;">${t.merchant}</div>
+                            <div style="font-weight: 500; text-align: left;">${DataManager.escapeHtml(t.merchant)}</div>
                             <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; text-align: left;">${DataManager.formatDate(t.date)}</div>
                         </div>
                     </div>
                 </td>
                 <td data-label="Category"><span class="tag bg-primary-light">${t.category}</span></td>
-                <td data-label="Account">${account ? account.name : 'Unknown'}</td>
+                <td data-label="Account">${account ? DataManager.escapeHtml(account.name) : 'Unknown'}</td>
                 <td data-label="Amount" style="text-align: right; font-weight: 600;" class="${amountClass}">
                     <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px;">
                         <span>${amountPrefix}${DataManager.formatCurrency(Math.abs(t.amount))}</span>
                         <div style="display: flex; gap: 4px;">
+                            ${t.isDecoupled ? '' : `
                             <button class="icon-btn tooltip" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--text-secondary);" data-tooltip="Edit" onclick="app.showEditTransactionModal(${t.id})">
                                 <span class="material-icons-round" style="font-size: 18px;">edit</span>
                             </button>
+                            `}
                             <button class="icon-btn tooltip" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--danger);" data-tooltip="Delete" onclick="app.deleteTransaction(${t.id})">
                                 <span class="material-icons-round" style="font-size: 18px;">delete</span>
                             </button>
@@ -114,18 +131,23 @@ const Components = {
                 </button>
                 <div style="display: none; margin-top: 8px;">
                     ${transfers.map(t => {
-                        const isOutgoing = t.accountId === account.id;
-                        const otherId = isOutgoing ? t.toAccountId : t.accountId;
-                        const other = DataManager.getAccountById(otherId);
-                        const otherName = other ? other.name : 'Unknown';
+                        const isOutgoing = t.isDecoupled ? (t.decoupledDirection === 'outgoing') : (t.accountId === account.id);
+                        let otherName = 'Unknown';
+                        if (t.isDecoupled) {
+                            otherName = t.deletedAccountName ? `${t.deletedAccountName} (Deleted)` : 'Unknown';
+                        } else {
+                            const otherId = isOutgoing ? t.toAccountId : t.accountId;
+                            const other = DataManager.getAccountById(otherId);
+                            otherName = other ? other.name : 'Unknown';
+                        }
                         const noteMatch = t.merchant.match(/\(([^)]+)\)$/);
                         return `
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border-light);">
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <span class="material-icons-round" style="font-size: 15px; color: ${isOutgoing ? 'var(--danger)' : 'var(--success)'};">${isOutgoing ? 'arrow_upward' : 'arrow_downward'}</span>
                                     <div>
-                                        <div style="font-size: 13px; font-weight: 500;">${isOutgoing ? 'To ' + otherName : 'From ' + otherName}</div>
-                                        <div style="font-size: 11px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}${noteMatch ? ' · ' + noteMatch[1] : ''}</div>
+                                        <div style="font-size: 13px; font-weight: 500;">${isOutgoing ? 'To ' + DataManager.escapeHtml(otherName) : 'From ' + DataManager.escapeHtml(otherName)}</div>
+                                        <div style="font-size: 11px; color: var(--text-secondary);">${DataManager.formatDate(t.date)}${noteMatch ? ' · ' + DataManager.escapeHtml(noteMatch[1]) : ''}</div>
                                     </div>
                                 </div>
                                 <div style="font-size: 13px; font-weight: 600; color: ${isOutgoing ? 'var(--danger)' : 'var(--success)'};">${isOutgoing ? '-' : '+'}${DataManager.formatCurrency(Math.abs(t.amount))}</div>
