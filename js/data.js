@@ -578,7 +578,7 @@ const DataManager = {
 
     getRegularTransactions: (limit = null) => {
         const sorted = [...appData.transactions]
-            .filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer' && !t.toAccountId && !t.isCashAdvance && !(t.category === 'Credit Card' && (t.targetCardId != null || t.type === 'income' || t.amount > 0)))
+            .filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer' && t.category !== 'Credit Card' && !t.toAccountId && !t.isCashAdvance)
             .sort((a, b) => {
                 const dateDiff = new Date(b.date) - new Date(a.date);
                 if (dateDiff !== 0) return dateDiff;
@@ -835,6 +835,12 @@ const DataManager = {
         const index = appData.transactions.findIndex(t => t.id === id);
         if (index !== -1) {
             const t = appData.transactions[index];
+            if (t.isDecoupled) {
+                // Decoupled transfer/payment with a deleted account: do not adjust account balance to avoid phantom money
+                appData.transactions.splice(index, 1);
+                DataManager.saveData();
+                return true;
+            }
             const account = appData.accounts.find(a => a.id === parseInt(t.accountId));
             if (account) {
                 account.balance -= parseFloat(t.amount);
@@ -870,6 +876,18 @@ const DataManager = {
         const index = appData.transactions.findIndex(t => t.id === id);
         if (index !== -1) {
             const oldT = appData.transactions[index];
+            if (oldT.isDecoupled) {
+                // Decoupled transfer with deleted account: guard balance and account mutators
+                updatedTransaction.amount = oldT.amount;
+                updatedTransaction.accountId = oldT.accountId;
+                updatedTransaction.toAccountId = oldT.toAccountId;
+                updatedTransaction.isDecoupled = true;
+                updatedTransaction.decoupledDirection = oldT.decoupledDirection;
+                updatedTransaction.deletedAccountName = oldT.deletedAccountName;
+                appData.transactions[index] = { ...oldT, ...updatedTransaction };
+                DataManager.saveData();
+                return true;
+            }
             
             // Revert old transaction effect on source account
             const oldAccount = appData.accounts.find(a => a.id === parseInt(oldT.accountId));
@@ -1230,6 +1248,10 @@ const DataManager = {
         const deletedAccount = (appData.accounts || []).find(a => a.id === id);
         const deletedAccName = deletedAccount ? deletedAccount.name : 'Deleted Account';
 
+        // Check if the account being deleted is linked to a credit card
+        const deletedCard = (typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCardByAccountId(id) : null;
+        const deletedCardId = deletedCard ? deletedCard.id : null;
+
         // Remove the account
         appData.accounts = (appData.accounts || []).filter(a => a.id !== id);
         
@@ -1248,7 +1270,12 @@ const DataManager = {
                 // Surviving account was the source (e.g. transfer/payment sent from Checking to Deleted Account).
                 // Keep transaction on source account, decouple toAccountId reference so history is preserved.
                 t.toAccountId = null;
-                t.targetCardId = null;
+                t.isDecoupled = true;
+                t.decoupledDirection = 'outgoing';
+                t.deletedAccountName = deletedAccName;
+                if (deletedCardId && t.targetCardId === deletedCardId) {
+                    t.targetCardId = null;
+                }
                 if (t.merchant && !t.merchant.includes('(Deleted)')) {
                     t.merchant = `${t.merchant} (Deleted)`;
                 }
@@ -1259,6 +1286,12 @@ const DataManager = {
                 t.accountId = t.toAccountId;
                 t.toAccountId = null;
                 t.amount = Math.abs(t.amount);
+                t.isDecoupled = true;
+                t.decoupledDirection = 'incoming';
+                t.deletedAccountName = deletedAccName;
+                if (deletedCardId && t.targetCardId === deletedCardId) {
+                    t.targetCardId = null;
+                }
                 if (t.merchant && !t.merchant.includes('(Deleted)')) {
                     t.merchant = `${t.merchant} (from ${deletedAccName} - Deleted)`;
                 } else if (!t.merchant) {

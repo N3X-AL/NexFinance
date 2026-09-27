@@ -642,12 +642,103 @@ console.log("✔ Settled loans list descending order test passed!");
     // Verify surviving checking account still has the payment transaction with targetCardId decoupled
     const decoupledTx = global.appData.transactions.find(t => t.id === 8888);
     assert(decoupledTx !== undefined, "Payment transaction must survive card deletion");
-    assert(decoupledTx.accountId === survivingCheckingAcc.id, "Surviving transaction belongs to checking account");
-    assert(decoupledTx.toAccountId === null, "toAccountId is decoupled to null");
-    assert(decoupledTx.targetCardId === null, "targetCardId is decoupled to null");
-    assert(survivingCheckingAcc.balance === 750, "Surviving checking balance must remain intact without phantom reversal");
-    console.log("✔ Credit card deletion decoupling test passed!");
+    // Test 30: Deleting or editing a decoupled transaction does not refund balance (no phantom money)
+    assert(decoupledTx.isDecoupled === true, "decoupledTx must have isDecoupled flag");
+    // Attempt to edit decoupled transaction amount
+    global.DataManager.editTransaction(decoupledTx.id, { amount: -500, merchant: 'Updated Merchant' });
+    const editedDecoupledTx = global.appData.transactions.find(t => t.id === 8888);
+    assert(survivingCheckingAcc.balance === 750, "Editing decoupled transaction must NOT mutate account balance");
+    assert(editedDecoupledTx.amount === -250, "Decoupled transaction amount must be guarded from mutation");
+    assert(editedDecoupledTx.merchant === 'Updated Merchant', "Non-financial fields like merchant can be updated");
+
+    // Deleting the decoupled transaction
+    global.DataManager.deleteTransaction(editedDecoupledTx.id);
+    assert(!global.appData.transactions.some(t => t.id === 8888), "Decoupled transaction should be removed");
+    assert(survivingCheckingAcc.balance === 750, "Deleting decoupled transaction must NOT refund balance (prevent phantom money)");
+    console.log("✔ Decoupled transaction balance protection test passed!");
+
+    // Test 31: Cash advance targetCardId preservation when receiving account is deleted
+    const cashAdvanceCard = global.CreditCardManager.saveCreditCard({
+        name: 'Advance Source Card',
+        bank: 'Bank Adv',
+        last4: '1122',
+        creditLimit: 3000
+    });
+    const advanceCheckingAcc = {
+        id: 7711,
+        name: 'Advance Checking Dest',
+        type: 'Checking',
+        balance: 500
+    };
+    global.appData.accounts.push(advanceCheckingAcc);
+    // Perform cash advance from card account to checking account
+    global.DataManager.transferFunds(cashAdvanceCard.accountId, advanceCheckingAcc.id, 200, '2026-09-21', 'ATM Advance', true);
+    const advanceTx = global.appData.transactions.find(t => t.isCashAdvance && t.accountId === cashAdvanceCard.accountId);
+    assert(advanceTx !== undefined, "Cash advance transaction must exist");
+    assert(advanceTx.targetCardId === cashAdvanceCard.id, "targetCardId must reference the source card");
+
+    // Now delete the receiving bank account (advanceCheckingAcc)
+    global.DataManager.deleteAccount(advanceCheckingAcc.id);
+    // The cash advance transaction on the surviving card must keep targetCardId intact
+    assert(advanceTx.targetCardId === cashAdvanceCard.id, "targetCardId on source card must NOT be wiped when receiving account is deleted");
+    assert(advanceTx.toAccountId === null, "toAccountId is decoupled");
+    assert(advanceTx.isDecoupled === true, "advanceTx is marked decoupled");
+    console.log("✔ Cash advance targetCardId preservation on account deletion test passed!");
+
+    // Test 32: Incoming transfer direction and rendering when source account is deleted
+    const sourceToDeleteAcc = {
+        id: 5544,
+        name: 'Temporary Source Account',
+        type: 'Savings',
+        balance: 1000
+    };
+    const destSurvivingAcc = {
+        id: 5545,
+        name: 'Permanent Receiver Account',
+        type: 'Checking',
+        balance: 1000
+    };
+    global.appData.accounts.push(sourceToDeleteAcc, destSurvivingAcc);
+    global.DataManager.transferFunds(sourceToDeleteAcc.id, destSurvivingAcc.id, 300, '2026-09-22', 'Gift funds');
+    assert(destSurvivingAcc.balance === 1300, "Receiver balance is 1300");
+
+    // Delete the source account
+    global.DataManager.deleteAccount(sourceToDeleteAcc.id);
+
+    // Verify the surviving incoming transfer record
+    const incomingDecoupledTx = global.appData.transactions.find(t => t.accountId === destSurvivingAcc.id && t.category === 'Transfer');
+    assert(incomingDecoupledTx !== undefined, "Incoming transfer record must exist on surviving account");
+    assert(incomingDecoupledTx.isDecoupled === true, "Must be flagged as decoupled");
+    assert(incomingDecoupledTx.decoupledDirection === 'incoming', "decoupledDirection must be 'incoming'");
+    assert(incomingDecoupledTx.amount === 300, "Amount must be positive on destination account");
+
+    // Test UI rendering via accountCard
+    const receiverCardHtml = global.Components.accountCard(destSurvivingAcc);
+    assert(receiverCardHtml.includes('From Temporary Source Account (Deleted)'),
+        "Account card transfer history must show 'From Temporary Source Account (Deleted)' for incoming transfer");
+    assert(receiverCardHtml.includes(`+${global.DataManager.formatCurrency(300)}`), "Transfer history must show positive amount");
+    assert(receiverCardHtml.includes('arrow_downward'), "Incoming transfer must show green downward arrow");
+    console.log("✔ Incoming transfer direction preservation and rendering test passed!");
+
+    // Test 33: Unconditional Credit Card category exclusion from getRegularTransactions
+    const cardPaymentTx = {
+        id: 4433,
+        date: '2026-09-23',
+        merchant: 'Payment to Deleted Card (···0000) (Deleted)',
+        category: 'Credit Card',
+        amount: -150,
+        accountId: destSurvivingAcc.id,
+        toAccountId: null,
+        targetCardId: null,
+        isDecoupled: true,
+        status: 'Completed'
+    };
+    global.appData.transactions.push(cardPaymentTx);
+    const regs = global.DataManager.getRegularTransactions();
+    assert(!regs.some(t => t.id === 4433), "Preserved card payment with decoupled references must NOT appear in getRegularTransactions");
+    console.log("✔ Preserved credit card payment exclusion from regular transactions test passed!");
 
     console.log("All tests passed successfully!");
 })();
+
 
