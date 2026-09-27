@@ -699,6 +699,10 @@ class App {
         const fromId = parseInt(fromSelect.value);
         const fromAccount = appData.accounts.find(a => a.id === fromId);
         if (fromAccount && fromAccount.type === 'Credit') {
+            const card = (typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCardByAccountId(fromId) : null;
+            const feePercent = (card && card.cashAdvanceFee !== undefined) ? card.cashAdvanceFee : 3.0;
+            const aprPercent = (card && card.cashAdvanceApr !== undefined) ? card.cashAdvanceApr : (card ? card.apr : 27.99);
+            alertDiv.innerHTML = `<strong><i class="fas fa-exclamation-triangle" style="margin-right: 4px;"></i> Cash Advance Notice:</strong> Transferring funds from this credit card is treated as a Cash Advance. It incurs your card's configured upfront fee (<strong>${feePercent}%</strong>) and accrues immediate interest (<strong>${aprPercent}% APR</strong>) with zero grace period.`;
             alertDiv.style.display = 'block';
         } else {
             alertDiv.style.display = 'none';
@@ -896,6 +900,16 @@ class App {
                         <input type="text" inputmode="decimal" id="cc-foreign-fee" class="form-control math-input" value="3.0">
                     </div>
                 </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Cash Advance Fee (%)</label>
+                        <input type="text" inputmode="decimal" id="cc-cash-fee" class="form-control math-input" value="3.0" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cash Advance APR (%)</label>
+                        <input type="text" inputmode="decimal" id="cc-cash-apr" class="form-control math-input" value="27.99" required>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label class="form-label">Card Visual Theme</label>
                     <select id="cc-theme" class="form-control">
@@ -928,6 +942,8 @@ class App {
                 minPaymentPercent: parseFloat(document.getElementById('cc-min-percent').value),
                 minPaymentFloor: parseFloat(document.getElementById('cc-min-floor').value),
                 foreignTxFee: parseFloat(document.getElementById('cc-foreign-fee').value) || 0,
+                cashAdvanceFee: parseFloat(document.getElementById('cc-cash-fee').value) || 0,
+                cashAdvanceApr: parseFloat(document.getElementById('cc-cash-apr').value) || 0,
                 colorTheme: document.getElementById('cc-theme').value
             });
 
@@ -988,6 +1004,16 @@ class App {
                         <input type="text" inputmode="decimal" id="ecc-foreign-fee" class="form-control math-input" value="${card.foreignTxFee || 0}">
                     </div>
                 </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Cash Advance Fee (%)</label>
+                        <input type="text" inputmode="decimal" id="ecc-cash-fee" class="form-control math-input" value="${card.cashAdvanceFee !== undefined ? card.cashAdvanceFee : 3.0}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cash Advance APR (%)</label>
+                        <input type="text" inputmode="decimal" id="ecc-cash-apr" class="form-control math-input" value="${card.cashAdvanceApr !== undefined ? card.cashAdvanceApr : 27.99}" required>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label class="form-label">Card Visual Theme</label>
                     <select id="ecc-theme" class="form-control">
@@ -1026,6 +1052,8 @@ class App {
                 minPaymentPercent: parseFloat(document.getElementById('ecc-min-percent').value),
                 minPaymentFloor: parseFloat(document.getElementById('ecc-min-floor').value),
                 foreignTxFee: parseFloat(document.getElementById('ecc-foreign-fee').value) || 0,
+                cashAdvanceFee: parseFloat(document.getElementById('ecc-cash-fee').value) || 0,
+                cashAdvanceApr: parseFloat(document.getElementById('ecc-cash-apr').value) || 0,
                 colorTheme: document.getElementById('ecc-theme').value
             });
 

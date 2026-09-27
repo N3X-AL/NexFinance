@@ -291,7 +291,7 @@ console.log("✔ Settled loans list descending order test passed!");
     // Verify Cash Advance row renders in credit cards view
     const ccHtmlWithCA = global.Views['credit-cards']();
     assert(ccHtmlWithCA.includes('Includes Cash Advance:'), "View should render Cash Advance row");
-    assert(ccHtmlWithCA.includes('Cash Advance APR (No Grace Period)'), "View should indicate Cash Advance APR with no grace period");
+    assert(ccHtmlWithCA.includes('Cash Advance APR'), "View should indicate Cash Advance APR with no grace period");
     console.log("✔ Cash advance transfer, fee calculation, immediate interest, and UI row test passed!");
 
     // Test 16: Refund / Income transaction on Credit Card
@@ -309,6 +309,27 @@ console.log("✔ Settled loans list descending order test passed!");
     const metricsAfterRefund = global.CreditCardManager.getCardMetrics(createdCard);
     assert(metricsAfterRefund.totalOutstanding === 1100, "Outstanding balance should reflect the $200 refund reduction");
     console.log("✔ Credit Card refund/credit income transaction test passed!");
+
+    // Test 17: Custom configured Cash Advance fee and APR
+    const customCard = global.CreditCardManager.saveCreditCard({
+        name: 'Gold Rewards',
+        bank: 'Amex',
+        last4: '1004',
+        creditLimit: 15000,
+        apr: 22.0,
+        cashAdvanceFee: 5.0, // 5% custom fee
+        cashAdvanceApr: 29.99, // 29.99% custom APR
+        billingCycleDay: 20
+    });
+    assert(customCard.cashAdvanceFee === 5.0, "Card should save custom cash advance fee of 5.0%");
+    assert(customCard.cashAdvanceApr === 29.99, "Card should save custom cash advance APR of 29.99%");
+
+    // Transfer cash advance from customCard
+    global.DataManager.transferFunds(customCard.accountId, checkingAcc.id, 500, todayStr, 'Test custom cash advance');
+    const customMetrics = global.CreditCardManager.getCardMetrics(customCard);
+    assert(customMetrics.cashAdvanceFees === 25.0, "Cash advance fee should be $25 (5% of $500)");
+    assert(customMetrics.cashAdvanceApr === 29.99, "Cash advance APR should be 29.99%");
+    console.log("✔ Custom configured Cash Advance fee and APR test passed!");
 
     console.log("All tests passed successfully!");
 })();

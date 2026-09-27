@@ -1271,6 +1271,8 @@ const CreditCardManager = {
             card.last4 = cardData.last4 || card.last4;
             card.creditLimit = parseFloat(cardData.creditLimit) || 5000;
             card.apr = parseFloat(cardData.apr) || 24.99;
+            card.cashAdvanceApr = (cardData.cashAdvanceApr !== undefined && cardData.cashAdvanceApr !== '') ? parseFloat(cardData.cashAdvanceApr) : (card.cashAdvanceApr !== undefined ? card.cashAdvanceApr : 27.99);
+            card.cashAdvanceFee = (cardData.cashAdvanceFee !== undefined && cardData.cashAdvanceFee !== '') ? parseFloat(cardData.cashAdvanceFee) : (card.cashAdvanceFee !== undefined ? card.cashAdvanceFee : 3.0);
             card.billingCycleDay = Math.min(31, Math.max(1, parseInt(cardData.billingCycleDay) || 15));
             card.gracePeriodDays = Math.max(1, parseInt(cardData.gracePeriodDays) || 25);
             card.minPaymentPercent = parseFloat(cardData.minPaymentPercent) || 3.5;
@@ -1305,6 +1307,8 @@ const CreditCardManager = {
                 last4: cardData.last4 || '0000',
                 creditLimit: parseFloat(cardData.creditLimit) || 5000,
                 apr: parseFloat(cardData.apr) || 24.99,
+                cashAdvanceApr: (cardData.cashAdvanceApr !== undefined && cardData.cashAdvanceApr !== '') ? parseFloat(cardData.cashAdvanceApr) : 27.99,
+                cashAdvanceFee: (cardData.cashAdvanceFee !== undefined && cardData.cashAdvanceFee !== '') ? parseFloat(cardData.cashAdvanceFee) : 3.0,
                 billingCycleDay: Math.min(31, Math.max(1, parseInt(cardData.billingCycleDay) || 15)),
                 gracePeriodDays: Math.max(1, parseInt(cardData.gracePeriodDays) || 25),
                 minPaymentPercent: parseFloat(cardData.minPaymentPercent) || 3.5,
@@ -1415,7 +1419,9 @@ const CreditCardManager = {
         const cardTransactions = [];
         const apr = parseFloat(card.apr) || 0;
         const dailyRate = apr > 0 ? (apr / 100) / 365 : 0;
-        const cashAdvanceFeeRate = (parseFloat(card.cashAdvanceFee) || 3.0) / 100;
+        const cashAdvanceApr = (card.cashAdvanceApr !== undefined && !isNaN(parseFloat(card.cashAdvanceApr))) ? parseFloat(card.cashAdvanceApr) : (apr || 27.99);
+        const cashAdvanceDailyRate = cashAdvanceApr > 0 ? (cashAdvanceApr / 100) / 365 : 0;
+        const cashAdvanceFeeRate = ((card.cashAdvanceFee !== undefined && !isNaN(parseFloat(card.cashAdvanceFee))) ? parseFloat(card.cashAdvanceFee) : 3.0) / 100;
 
         (appData.transactions || []).forEach(t => {
             const isCardExpense = t.accountId === card.accountId && t.amount < 0;
@@ -1434,7 +1440,7 @@ const CreditCardManager = {
                         if (t.isCashAdvance) {
                             cashAdvancePurchases += Math.abs(t.amount);
                             const daysFromTx = Math.max(1, Math.round((cycleEndMs - tTime) / (24 * 60 * 60 * 1000)));
-                            cashAdvanceInterest += Math.abs(t.amount) * dailyRate * daysFromTx;
+                            cashAdvanceInterest += Math.abs(t.amount) * cashAdvanceDailyRate * daysFromTx;
                             cashAdvanceFees += Math.abs(t.amount) * cashAdvanceFeeRate;
                         }
                     } else if (isCardPayment) {
@@ -1501,6 +1507,8 @@ const CreditCardManager = {
             cashAdvancePurchases,
             cashAdvanceInterest,
             cashAdvanceFees,
+            cashAdvanceFeePercent: cashAdvanceFeeRate * 100,
+            cashAdvanceApr,
             priorUnpaid,
             isGracePeriodActive,
             estimatedInterest,
