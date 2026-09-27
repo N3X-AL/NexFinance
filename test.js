@@ -585,5 +585,69 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(!regularTransactions.some(t => t.id === 7772), "Card refund must NOT be in regular transactions");
     console.log("✔ Flow analytics card payment and refund exclusion test passed!");
 
+    // Test 28: Short month billing cycle calculation (e.g. cycleDay 31 with Feb 28 cut)
+    const monthEndCard = {
+        id: 9999,
+        billingCycleDay: 31,
+        gracePeriodDays: 25
+    };
+    // March 15, 2026: prior cycle ended on Feb 28, 2026.
+    // Cycle start should be March 1, 2026, 00:00:00 (NOT Feb 28).
+    const marchCycle = global.CreditCardManager.getCardBillingCycle(monthEndCard, new Date(2026, 2, 15));
+    assert(marchCycle.startDate.getFullYear() === 2026 && marchCycle.startDate.getMonth() === 2 && marchCycle.startDate.getDate() === 1,
+        `March cycle start should be March 1, got ${marchCycle.startDate.toISOString()}`);
+    assert(marchCycle.endDate.getFullYear() === 2026 && marchCycle.endDate.getMonth() === 2 && marchCycle.endDate.getDate() === 31,
+        `March cycle end should be March 31, got ${marchCycle.endDate.toISOString()}`);
+
+    // May 5, 2026: prior cycle ended on April 30, 2026.
+    // Cycle start should be May 1, 2026, 00:00:00.
+    const mayCycle = global.CreditCardManager.getCardBillingCycle(monthEndCard, new Date(2026, 4, 5));
+    assert(mayCycle.startDate.getFullYear() === 2026 && mayCycle.startDate.getMonth() === 4 && mayCycle.startDate.getDate() === 1,
+        `May cycle start should be May 1, got ${mayCycle.startDate.toISOString()}`);
+    assert(mayCycle.endDate.getFullYear() === 2026 && mayCycle.endDate.getMonth() === 4 && mayCycle.endDate.getDate() === 31,
+        `May cycle end should be May 31, got ${mayCycle.endDate.toISOString()}`);
+    console.log("✔ Short month billing cycle calculation test passed!");
+
+    // Test 29: Credit card deletion decouples targetCardId on surviving payments
+    const deleteTestCard = global.CreditCardManager.saveCreditCard({
+        name: 'Delete Target Card',
+        bank: 'Bank Del',
+        last4: '9999',
+        creditLimit: 1000
+    });
+    const survivingCheckingAcc = {
+        id: 9988,
+        name: 'Surviving Checking',
+        type: 'Checking',
+        balance: 1000
+    };
+    global.appData.accounts.push(survivingCheckingAcc);
+    const paymentToDeletedCard = {
+        id: 8888,
+        date: '2026-09-20',
+        merchant: 'Payment to Delete Target Card (···9999)',
+        category: 'Credit Card',
+        amount: -250,
+        accountId: survivingCheckingAcc.id,
+        toAccountId: deleteTestCard.accountId,
+        targetCardId: deleteTestCard.id,
+        status: 'Completed'
+    };
+    global.DataManager.addTransaction(paymentToDeletedCard);
+    assert(survivingCheckingAcc.balance === 750, "Checking balance reduced by 250");
+
+    // Delete the credit card
+    global.CreditCardManager.deleteCreditCard(deleteTestCard.id);
+
+    // Verify surviving checking account still has the payment transaction with targetCardId decoupled
+    const decoupledTx = global.appData.transactions.find(t => t.id === 8888);
+    assert(decoupledTx !== undefined, "Payment transaction must survive card deletion");
+    assert(decoupledTx.accountId === survivingCheckingAcc.id, "Surviving transaction belongs to checking account");
+    assert(decoupledTx.toAccountId === null, "toAccountId is decoupled to null");
+    assert(decoupledTx.targetCardId === null, "targetCardId is decoupled to null");
+    assert(survivingCheckingAcc.balance === 750, "Surviving checking balance must remain intact without phantom reversal");
+    console.log("✔ Credit card deletion decoupling test passed!");
+
     console.log("All tests passed successfully!");
 })();
+

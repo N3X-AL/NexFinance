@@ -1248,6 +1248,7 @@ const DataManager = {
                 // Surviving account was the source (e.g. transfer/payment sent from Checking to Deleted Account).
                 // Keep transaction on source account, decouple toAccountId reference so history is preserved.
                 t.toAccountId = null;
+                t.targetCardId = null;
                 if (t.merchant && !t.merchant.includes('(Deleted)')) {
                     t.merchant = `${t.merchant} (Deleted)`;
                 }
@@ -1465,8 +1466,12 @@ const CreditCardManager = {
             if (card.accountId) {
                 DataManager.deleteAccount(card.accountId);
             }
-            // Remove any remaining orphaned transactions tagged with targetCardId
-            appData.transactions = (appData.transactions || []).filter(t => t.targetCardId !== cardId);
+            // Decouple any surviving transactions referencing targetCardId
+            (appData.transactions || []).forEach(t => {
+                if (t.targetCardId === cardId) {
+                    t.targetCardId = null;
+                }
+            });
             DataManager.saveData();
             return true;
         }
@@ -1484,28 +1489,35 @@ const CreditCardManager = {
         const day = validDate.getDate();
 
         const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+        const thisMonthCutDay = Math.min(cycleDay, getDaysInMonth(year, month));
 
-        let cycleStart, cycleEnd;
+        let endYear, endMonth, endDay, priorYear, priorMonth, priorDay;
 
-        if (day > cycleDay) {
-            // Current cycle started this month after cycleDay, ends next month on cycleDay
-            const startDay = Math.min(cycleDay + 1, getDaysInMonth(year, month));
-            cycleStart = new Date(year, month, startDay, 0, 0, 0, 0);
+        if (day > thisMonthCutDay) {
+            // Current cycle ends next month on effective cycleDay
+            endYear = month === 11 ? year + 1 : year;
+            endMonth = (month + 1) % 12;
+            endDay = Math.min(cycleDay, getDaysInMonth(endYear, endMonth));
 
-            const nextMonthYear = month === 11 ? year + 1 : year;
-            const nextMonth = (month + 1) % 12;
-            const endDay = Math.min(cycleDay, getDaysInMonth(nextMonthYear, nextMonth));
-            cycleEnd = new Date(nextMonthYear, nextMonth, endDay, 23, 59, 59, 999);
+            // Prior cycle ended this month on effective cycleDay
+            priorYear = year;
+            priorMonth = month;
+            priorDay = thisMonthCutDay;
         } else {
-            // Current cycle started previous month after cycleDay, ends this month on cycleDay
-            const prevMonthYear = month === 0 ? year - 1 : year;
-            const prevMonth = (month + 11) % 12;
-            const startDay = Math.min(cycleDay + 1, getDaysInMonth(prevMonthYear, prevMonth));
-            cycleStart = new Date(prevMonthYear, prevMonth, startDay, 0, 0, 0, 0);
+            // Current cycle ends this month on effective cycleDay
+            endYear = year;
+            endMonth = month;
+            endDay = thisMonthCutDay;
 
-            const endDay = Math.min(cycleDay, getDaysInMonth(year, month));
-            cycleEnd = new Date(year, month, endDay, 23, 59, 59, 999);
+            // Prior cycle ended previous month on effective cycleDay
+            priorYear = month === 0 ? year - 1 : year;
+            priorMonth = (month + 11) % 12;
+            priorDay = Math.min(cycleDay, getDaysInMonth(priorYear, priorMonth));
         }
+
+        const cycleEnd = new Date(endYear, endMonth, endDay, 23, 59, 59, 999);
+        // Start is strictly the day after the effective prior statement date (prevents short-month overlapping)
+        const cycleStart = new Date(priorYear, priorMonth, priorDay + 1, 0, 0, 0, 0);
 
         const dueDate = new Date(cycleEnd.getTime() + (graceDays * 24 * 60 * 60 * 1000));
         dueDate.setHours(23, 59, 59, 999);
