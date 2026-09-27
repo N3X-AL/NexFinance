@@ -3,11 +3,12 @@ const defaultData = {
     accounts: [
         { id: 1, name: 'Main Account', type: 'Checking', balance: 0.00, color: 'var(--primary)' }
     ],
+    creditCards: [],
     transactions: [],
     budgets: [],
     loans: [],
     categories: [
-        'Business', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'
+        'Business', 'Credit Card', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'
     ],
     currency: 'USD'
 };
@@ -15,12 +16,33 @@ const defaultData = {
 const savedData = localStorage.getItem('nexfinance_data');
 const appData = savedData ? JSON.parse(savedData) : defaultData;
 if (!appData.currency) appData.currency = 'USD';
+if (!appData.creditCards || !Array.isArray(appData.creditCards)) appData.creditCards = [];
+
+// Canonical normalization for categories to deduplicate case-insensitively and ensure 'Credit Card' is present
+const normalizeInitialCategories = (existingCats = []) => {
+    const defaultCategories = ['Business', 'Credit Card', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'];
+    const map = new Map();
+    [...defaultCategories, ...existingCats].forEach(cat => {
+        if (!cat || typeof cat !== 'string') return;
+        const trimmed = cat.trim();
+        if (!trimmed) return;
+        const lower = trimmed.toLowerCase();
+        if (lower === 'credit card') {
+            map.set(lower, 'Credit Card');
+        } else if (!map.has(lower)) {
+            map.set(lower, trimmed);
+        }
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+};
+
 if (!appData.categories) {
-    const defaultCategories = ['Business', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'];
-    const extracted = appData.transactions
+    const extracted = (appData.transactions || [])
         .filter(t => t.category && !['loan', 'loan settlement', 'transfer', 'investment'].includes(t.category.toLowerCase()))
         .map(t => t.category);
-    appData.categories = [...new Set([...defaultCategories, ...extracted])].sort();
+    appData.categories = normalizeInitialCategories(extracted);
+} else {
+    appData.categories = normalizeInitialCategories(appData.categories);
 }
 
 const CloudSync = {
@@ -149,26 +171,46 @@ const DataManager = {
         return false;
     },
 
+    isCreditCardAccount: (accountId) => {
+        if (!accountId) return false;
+        const acc = (appData.accounts || []).find(a => a.id === accountId);
+        if (acc && acc.type === 'Credit') return true;
+        if ((appData.creditCards || []).some(c => c.accountId === accountId)) return true;
+        return false;
+    },
+
+    isCreditCardTransaction: (t) => {
+        if (!t) return false;
+        if (t.category === 'Credit Card') return true;
+        if (t.isCashAdvance) return true;
+        if (t.targetCardId != null) return true;
+        if (t.accountId && DataManager.isCreditCardAccount(t.accountId)) return true;
+        if (t.toAccountId && DataManager.isCreditCardAccount(t.toAccountId)) return true;
+        return false;
+    },
+
     getNetWorth: () => {
-        const accountBalance = appData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
+        const nonCreditAccounts = (appData.accounts || []).filter(acc => !DataManager.isCreditCardAccount(acc.id));
+        const accountBalance = nonCreditAccounts.reduce((sum, acc) => sum + acc.balance, 0);
         const loansGivenBalance = appData.loans.filter(l => l.type === 'given').reduce((sum, l) => sum + (l.amount - l.settledAmount), 0);
         const loansReceivedBalance = appData.loans.filter(l => l.type === 'received').reduce((sum, l) => sum + (l.amount - l.settledAmount), 0);
         return accountBalance + loansGivenBalance - loansReceivedBalance;
     },
 
     getMoneyInHand: () => {
-        return appData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
+        const nonCreditAccounts = (appData.accounts || []).filter(acc => !DataManager.isCreditCardAccount(acc.id));
+        return nonCreditAccounts.reduce((sum, acc) => sum + acc.balance, 0);
     },
     
     getMonthlyIncome: () => {
         return appData.transactions
-            .filter(t => t.amount > 0 && t.category !== 'Loan')
+            .filter(t => t.amount > 0 && t.category !== 'Loan' && !DataManager.isCreditCardTransaction(t))
             .reduce((sum, t) => sum + t.amount, 0);
     },
     
     getMonthlyExpenses: () => {
         return Math.abs(appData.transactions
-            .filter(t => t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer')
+            .filter(t => t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Transfer' && !DataManager.isCreditCardTransaction(t))
             .reduce((sum, t) => sum + t.amount, 0));
     },
 
@@ -181,6 +223,7 @@ const DataManager = {
         let pastIncome = 0, pastExpense = 0, pastNet = 0, pastMoney = 0;
 
         appData.transactions.forEach(t => {
+            if (DataManager.isCreditCardTransaction(t)) return;
             const d = new Date(t.date);
             if (d >= thirtyDaysAgo) {
                 if (t.amount > 0 && t.category !== 'Loan' && t.category !== 'Transfer') currentIncome += t.amount;
@@ -245,7 +288,11 @@ const DataManager = {
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > now) return false;
-                    if (targetAccountId !== null && t.accountId !== targetAccountId) return false;
+                    if (targetAccountId !== null) {
+                        if (t.accountId !== targetAccountId) return false;
+                    } else if (DataManager.isCreditCardTransaction(t)) {
+                        return false;
+                    }
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
@@ -263,6 +310,7 @@ const DataManager = {
         if (type === 'networth') {
             runningValue = DataManager.getNetWorth();
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startDate && t.category !== 'Loan' && t.category !== 'Transfer') {
                     runningValue -= t.amount;
@@ -271,6 +319,7 @@ const DataManager = {
         } else {
             runningValue = DataManager.getMoneyInHand();
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startDate && t.category !== 'Transfer') {
                     runningValue -= t.amount;
@@ -282,6 +331,7 @@ const DataManager = {
         const uniqueDates = [...new Set(
             appData.transactions
                 .filter(t => {
+                    if (DataManager.isCreditCardTransaction(t)) return false;
                     const td = new Date(t.date);
                     return td >= startDate && td <= now;
                 })
@@ -295,6 +345,7 @@ const DataManager = {
             endOfDay.setHours(23, 59, 59, 999);
 
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startOfDay && td <= endOfDay) {
                     if (type === 'networth' && t.category !== 'Loan' && t.category !== 'Transfer') runningValue += t.amount;
@@ -323,6 +374,7 @@ const DataManager = {
             labels.forEach(label => {
                 const sum = appData.transactions
                     .filter(t => {
+                        if (DataManager.isCreditCardTransaction(t)) return false;
                         const td = new Date(t.date);
                         const tLabel = td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
                         if (tLabel !== label) return false;
@@ -339,6 +391,7 @@ const DataManager = {
             let runningValue = 0;
             appData.transactions
                 .filter(t => {
+                    if (DataManager.isCreditCardTransaction(t)) return false;
                     const td = new Date(t.date);
                     if (td >= startMonth) return false;
                     if (type === 'networth') return t.category !== 'Loan' && t.category !== 'Transfer';
@@ -349,6 +402,7 @@ const DataManager = {
             labels.forEach(label => {
                 appData.transactions
                     .filter(t => {
+                        if (DataManager.isCreditCardTransaction(t)) return false;
                         const td = new Date(t.date);
                         const tLabel = td.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
                         if (tLabel !== label) return false;
@@ -427,7 +481,11 @@ const DataManager = {
                 .filter(t => {
                     const td = new Date(t.date);
                     if (td < startDate || td > endDate) return false;
-                    if (targetAccountId !== null && t.accountId !== targetAccountId) return false;
+                    if (targetAccountId !== null) {
+                        if (t.accountId !== targetAccountId) return false;
+                    } else if (DataManager.isCreditCardTransaction(t)) {
+                        return false;
+                    }
                     if (type === 'income') return t.amount > 0 && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                     return t.amount < 0 && t.category !== 'Investment' && t.category !== 'Loan' && t.category !== 'Loan Settlement' && t.category !== 'Transfer';
                 })
@@ -445,12 +503,14 @@ const DataManager = {
         if (type === 'networth') {
             runningValue = DataManager.getNetWorth();
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startDate && t.category !== 'Loan' && t.category !== 'Transfer') runningValue -= t.amount;
             });
         } else {
             runningValue = DataManager.getMoneyInHand();
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startDate && t.category !== 'Transfer') runningValue -= t.amount;
             });
@@ -458,7 +518,11 @@ const DataManager = {
 
         const uniqueDates = [...new Set(
             appData.transactions
-                .filter(t => { const td = new Date(t.date); return td >= startDate && td <= endDate; })
+                .filter(t => {
+                    if (DataManager.isCreditCardTransaction(t)) return false;
+                    const td = new Date(t.date);
+                    return td >= startDate && td <= endDate;
+                })
                 .map(t => t.date)
         )].sort();
 
@@ -468,6 +532,7 @@ const DataManager = {
             const startOfDay = new Date(dateStr); startOfDay.setHours(0, 0, 0, 0);
             const endOfDay = new Date(dateStr); endOfDay.setHours(23, 59, 59, 999);
             appData.transactions.forEach(t => {
+                if (DataManager.isCreditCardTransaction(t)) return;
                 const td = new Date(t.date);
                 if (td >= startOfDay && td <= endOfDay) {
                     if (type === 'networth' && t.category !== 'Loan' && t.category !== 'Transfer') runningValue += t.amount;
@@ -485,7 +550,7 @@ const DataManager = {
         const sorted = [...appData.transactions]
             .filter(t => t.category !== 'Transfer')
             .sort((a, b) => {
-                const dateDiff = new Date(a.date) - new Date(b.date);
+                const dateDiff = new Date(b.date) - new Date(a.date);
                 if (dateDiff !== 0) return dateDiff;
                 return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
             })
@@ -519,11 +584,13 @@ const DataManager = {
     },
 
     getDashboardTransactions: (limit = null) => {
-        const sorted = [...appData.transactions].filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement').sort((a, b) => {
-            const dateDiff = new Date(b.date) - new Date(a.date);
-            if (dateDiff !== 0) return dateDiff;
-            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-        });
+        const sorted = [...appData.transactions]
+            .filter(t => t.category !== 'Loan' && t.category !== 'Loan Settlement' && !DataManager.isCreditCardTransaction(t))
+            .sort((a, b) => {
+                const dateDiff = new Date(b.date) - new Date(a.date);
+                if (dateDiff !== 0) return dateDiff;
+                return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+            });
         return limit ? sorted.slice(0, limit) : sorted;
     },
 
@@ -559,17 +626,26 @@ const DataManager = {
     },
 
     getCategories: () => {
-        if (!appData.categories || !Array.isArray(appData.categories)) {
-            const defaultCategories = ['Business', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'];
-            const extracted = (appData.transactions || [])
-                .filter(t => t.category && !DataManager.getCanonicalSystemCategory(t.category))
-                .map(t => t.category);
-            appData.categories = [...new Set([...defaultCategories, ...extracted])].sort();
+        const defaultCategories = ['Business', 'Credit Card', 'Entertainment', 'Food', 'Gift', 'Healthcare', 'Housing', 'Interest', 'Refund', 'Salary', 'Shopping', 'Transport', 'Utilities'];
+        const existing = (appData.categories && Array.isArray(appData.categories)) ? appData.categories : [];
+        const extracted = (appData.transactions || [])
+            .filter(t => t.category && !DataManager.getCanonicalSystemCategory(t.category))
+            .map(t => t.category);
 
-            // We optionally save the data here if we just reconstructed it so it's persisted, but getCategories is a getter.
-            // If DataManager exists, we can call saveData, but doing it in a getter might cause issues. We'll skip saveData here since any modification (addCategory) will save it anyway.
-        }
-        return [...appData.categories].sort();
+        const map = new Map();
+        [...defaultCategories, ...existing, ...extracted].forEach(cat => {
+            if (!cat || typeof cat !== 'string') return;
+            const trimmed = cat.trim();
+            if (!trimmed) return;
+            const lower = trimmed.toLowerCase();
+            if (lower === 'credit card') {
+                map.set(lower, 'Credit Card');
+            } else if (!map.has(lower)) {
+                map.set(lower, trimmed);
+            }
+        });
+        appData.categories = Array.from(map.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        return [...appData.categories];
     },
 
     addCategory: (name) => {
@@ -579,12 +655,17 @@ const DataManager = {
             return false;
         }
         appData.categories.push(name.trim());
-        appData.categories.sort();
+        appData.categories.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         DataManager.saveData();
         return true;
     },
 
     deleteCategory: (name, fallbackName) => {
+        // Protect 'Credit Card' category from deletion
+        if (name.trim().toLowerCase() === 'credit card') {
+            return false;
+        }
+
         DataManager.getCategories();
         const idx = appData.categories.findIndex(c => c === name);
         if (idx !== -1) {
@@ -594,7 +675,7 @@ const DataManager = {
         const lowerFallback = fallbackName.trim().toLowerCase();
         if (!appData.categories.some(c => c.toLowerCase() === lowerFallback)) {
             appData.categories.push(fallbackName.trim());
-            appData.categories.sort();
+            appData.categories.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         }
 
         appData.transactions.forEach(t => {
@@ -608,10 +689,20 @@ const DataManager = {
     },
 
     editCategory: (oldName, newName) => {
+        // Protect 'Credit Card' category from being renamed
+        if (oldName.trim().toLowerCase() === 'credit card') {
+            return false;
+        }
+
         DataManager.getCategories();
         const lowerNewName = newName.trim().toLowerCase();
         const lowerOldName = oldName.toLowerCase();
         
+        // Cannot rename another category to 'Credit Card'
+        if (lowerNewName === 'credit card') {
+            return false;
+        }
+
         // If the name didn't practically change, do nothing
         if (lowerOldName === lowerNewName && oldName.trim() === newName.trim()) return true;
 
@@ -623,11 +714,10 @@ const DataManager = {
         const idx = appData.categories.findIndex(c => c === oldName);
         if (idx !== -1) {
             appData.categories[idx] = newName.trim();
-            appData.categories.sort();
+            appData.categories.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         } else {
-            // Should not happen, but just in case
             appData.categories.push(newName.trim());
-            appData.categories.sort();
+            appData.categories.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         }
 
         // Update all transactions using the old category
@@ -677,6 +767,30 @@ const DataManager = {
         const month = String(validDate.getMonth() + 1).padStart(2, '0');
         const day = String(validDate.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
+    },
+
+    parseLocalDate: (dateStr) => {
+        if (!dateStr) return new Date();
+        if (dateStr instanceof Date) return dateStr;
+        const str = String(dateStr).trim();
+        const parts = str.split('-');
+        if (parts.length === 3 && parts[0].length === 4) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const d = parseInt(parts[2], 10);
+            return new Date(y, m, d, 12, 0, 0);
+        }
+        return new Date(dateStr);
+    },
+
+    escapeHtml: (str) => {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
 
     addTransaction: (transaction) => {
@@ -1060,16 +1174,22 @@ const DataManager = {
         const toAccount = appData.accounts.find(a => a.id === toAccountId);
         if (!fromAccount || !toAccount || fromAccountId === toAccountId || amount <= 0) return false;
 
+        const isCashAdvance = fromAccount.type === 'Credit';
+        const prefix = isCashAdvance ? 'Cash Advance' : 'Transfer';
         const description = note ? ` (${note})` : '';
         const transferAmount = Math.abs(amount);
 
+        const card = (isCashAdvance && typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCardByAccountId(fromAccountId) : null;
+
         DataManager.addTransaction({
             date: date,
-            merchant: `Transfer: ${fromAccount.name} → ${toAccount.name}${description}`,
+            merchant: `${prefix}: ${fromAccount.name} → ${toAccount.name}${description}`,
             category: 'Transfer',
             amount: -transferAmount,
             accountId: fromAccountId,
             toAccountId: toAccountId,
+            targetCardId: card ? card.id : null,
+            isCashAdvance: isCashAdvance,
             status: 'Completed'
         });
 
@@ -1089,19 +1209,41 @@ const DataManager = {
         appData.accounts = appData.accounts.filter(a => a.id !== id);
         
         // Remove all transactions associated with this account
-        appData.transactions = appData.transactions.filter(t => t.accountId !== id);
+        appData.transactions = appData.transactions.filter(t => t.accountId !== id && t.toAccountId !== id);
         
-        // Remove any loans associated with this account (if we were tracking them by account id exclusively)
-        // Since loans just generate transactions, removing the transactions above handles the ledger side.
+        // Remove any linked credit card
+        if (appData.creditCards) {
+            appData.creditCards = appData.creditCards.filter(c => c.accountId !== id);
+        }
         
         DataManager.saveData();
     },
 
     formatMathInput: (inputElement) => {
-        const val = inputElement.value;
-        if (!val) return;
+        if (!inputElement || !inputElement.value) return;
+
+        const rawValue = inputElement.value.trim();
+        // Skip if it's already a clean decimal or empty
+        if (/^-?\d+(\.\d+)?$/.test(rawValue)) {
+            // Apply min/max checks if any
+            const numVal = parseFloat(rawValue);
+            if (!isNaN(numVal)) {
+                const min = inputElement.getAttribute('min');
+                const max = inputElement.getAttribute('max');
+                if (min !== null && numVal < parseFloat(min)) {
+                    inputElement.setCustomValidity(`Value must be at least ${min}`);
+                } else if (max !== null && numVal > parseFloat(max)) {
+                    inputElement.setCustomValidity(`Value must be at most ${max}`);
+                } else {
+                    inputElement.setCustomValidity('');
+                }
+            }
+            return;
+        }
+
         try {
-            const sanitized = val.replace(/[^-()\d/*+.]/g, '');
+            // Allow only numbers, operators, parens, and decimal points
+            const sanitized = rawValue.replace(/[^0-9+\-*/().]/g, '');
             if (sanitized) {
                 const calculated = new Function("return (" + sanitized + ")")();
                 if (!isNaN(calculated) && isFinite(calculated)) {
@@ -1135,6 +1277,399 @@ const DataManager = {
         }
     }
 };
+
+const CreditCardManager = {
+    syncWithAccounts: () => {
+        if (!appData.creditCards) appData.creditCards = [];
+        if (!appData.accounts) appData.accounts = [];
+
+        // For any account of type 'Credit', ensure a card config exists
+        appData.accounts.forEach(acc => {
+            if (acc.type === 'Credit') {
+                let card = appData.creditCards.find(c => c.accountId === acc.id);
+                if (!card) {
+                    const nextId = appData.creditCards.length > 0 ? Math.max(...appData.creditCards.map(c => c.id)) + 1 : 1;
+                    card = {
+                        id: nextId,
+                        accountId: acc.id,
+                        name: acc.name,
+                        bank: 'Credit Card',
+                        last4: '4128',
+                        creditLimit: 5000,
+                        apr: 24.99,
+                        billingCycleDay: 15,
+                        gracePeriodDays: 25,
+                        minPaymentPercent: 3.5,
+                        minPaymentFloor: 25,
+                        foreignTxFee: 3.0,
+                        annualFee: 0,
+                        colorTheme: 'obsidian'
+                    };
+                    appData.creditCards.push(card);
+                }
+            }
+        });
+
+        // Remove cards whose linked account no longer exists or is no longer of type 'Credit'
+        appData.creditCards = appData.creditCards.filter(c => appData.accounts.some(a => a.id === c.accountId && a.type === 'Credit'));
+        return appData.creditCards;
+    },
+
+    getCreditCards: () => {
+        return CreditCardManager.syncWithAccounts();
+    },
+
+    getCreditCardById: (id) => {
+        const cards = CreditCardManager.getCreditCards();
+        return cards.find(c => c.id === parseInt(id));
+    },
+
+    getCreditCardByAccountId: (accId) => {
+        const cards = CreditCardManager.getCreditCards();
+        return cards.find(c => c.accountId === parseInt(accId));
+    },
+
+    saveCreditCard: (cardData) => {
+        CreditCardManager.syncWithAccounts();
+        const id = cardData.id ? parseInt(cardData.id) : null;
+        let card = id ? appData.creditCards.find(c => c.id === id) : null;
+
+        if (card) {
+            card.name = cardData.name || card.name;
+            card.bank = cardData.bank || card.bank;
+            card.last4 = cardData.last4 || card.last4;
+            card.creditLimit = parseFloat(cardData.creditLimit) || 5000;
+            card.apr = parseFloat(cardData.apr) || 24.99;
+            card.cashAdvanceApr = (cardData.cashAdvanceApr !== undefined && cardData.cashAdvanceApr !== '') ? parseFloat(cardData.cashAdvanceApr) : (card.cashAdvanceApr !== undefined ? card.cashAdvanceApr : 27.99);
+            card.cashAdvanceFee = (cardData.cashAdvanceFee !== undefined && cardData.cashAdvanceFee !== '') ? parseFloat(cardData.cashAdvanceFee) : (card.cashAdvanceFee !== undefined ? card.cashAdvanceFee : 3.0);
+            card.billingCycleDay = Math.min(31, Math.max(1, parseInt(cardData.billingCycleDay) || 15));
+            card.gracePeriodDays = Math.max(1, parseInt(cardData.gracePeriodDays) || 25);
+            card.minPaymentPercent = parseFloat(cardData.minPaymentPercent) || 3.5;
+            card.minPaymentFloor = parseFloat(cardData.minPaymentFloor) || 25;
+            card.foreignTxFee = parseFloat(cardData.foreignTxFee) || 0;
+            card.annualFee = parseFloat(cardData.annualFee) || 0;
+            card.colorTheme = cardData.colorTheme || card.colorTheme || 'obsidian';
+
+            // Also update linked account
+            const account = DataManager.getAccountById(card.accountId);
+            if (account) {
+                account.name = card.name;
+            }
+        } else {
+            // New card: also create an account with type 'Credit'
+            const nextAccountId = appData.accounts.length > 0 ? Math.max(...appData.accounts.map(a => a.id)) + 1 : 1;
+            const newAccount = {
+                id: nextAccountId,
+                name: cardData.name || 'Credit Card',
+                type: 'Credit',
+                balance: cardData.initialBalance ? -Math.abs(parseFloat(cardData.initialBalance)) : 0,
+                color: 'var(--danger)'
+            };
+            appData.accounts.push(newAccount);
+
+            const nextCardId = appData.creditCards.length > 0 ? Math.max(...appData.creditCards.map(c => c.id)) + 1 : 1;
+            card = {
+                id: nextCardId,
+                accountId: nextAccountId,
+                name: cardData.name || 'Credit Card',
+                bank: cardData.bank || 'Bank',
+                last4: cardData.last4 || '0000',
+                creditLimit: parseFloat(cardData.creditLimit) || 5000,
+                apr: parseFloat(cardData.apr) || 24.99,
+                cashAdvanceApr: (cardData.cashAdvanceApr !== undefined && cardData.cashAdvanceApr !== '') ? parseFloat(cardData.cashAdvanceApr) : 27.99,
+                cashAdvanceFee: (cardData.cashAdvanceFee !== undefined && cardData.cashAdvanceFee !== '') ? parseFloat(cardData.cashAdvanceFee) : 3.0,
+                billingCycleDay: Math.min(31, Math.max(1, parseInt(cardData.billingCycleDay) || 15)),
+                gracePeriodDays: Math.max(1, parseInt(cardData.gracePeriodDays) || 25),
+                minPaymentPercent: parseFloat(cardData.minPaymentPercent) || 3.5,
+                minPaymentFloor: parseFloat(cardData.minPaymentFloor) || 25,
+                foreignTxFee: parseFloat(cardData.foreignTxFee) || 0,
+                annualFee: parseFloat(cardData.annualFee) || 0,
+                colorTheme: cardData.colorTheme || 'obsidian'
+            };
+            appData.creditCards.push(card);
+        }
+
+        DataManager.saveData();
+        return card;
+    },
+
+    deleteCreditCard: (id) => {
+        const cardId = parseInt(id);
+        const cardIndex = appData.creditCards.findIndex(c => c.id === cardId);
+        if (cardIndex !== -1) {
+            const card = appData.creditCards[cardIndex];
+            appData.creditCards.splice(cardIndex, 1);
+            // Delegate account and transaction deletion to DataManager.deleteAccount
+            if (card.accountId) {
+                DataManager.deleteAccount(card.accountId);
+            }
+            // Remove any remaining orphaned transactions tagged with targetCardId
+            appData.transactions = (appData.transactions || []).filter(t => t.targetCardId !== cardId);
+            DataManager.saveData();
+            return true;
+        }
+        return false;
+    },
+
+    getCardBillingCycle: (card, refDate = new Date()) => {
+        const d = refDate instanceof Date ? refDate : new Date(refDate);
+        const validDate = isNaN(d.getTime()) ? new Date() : d;
+        const cycleDay = Math.min(31, Math.max(1, parseInt(card.billingCycleDay) || 15));
+        const graceDays = Math.max(1, parseInt(card.gracePeriodDays) || 25);
+
+        const year = validDate.getFullYear();
+        const month = validDate.getMonth(); // 0-indexed
+        const day = validDate.getDate();
+
+        const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+
+        let cycleStart, cycleEnd;
+
+        if (day > cycleDay) {
+            // Current cycle started this month after cycleDay, ends next month on cycleDay
+            const startDay = Math.min(cycleDay + 1, getDaysInMonth(year, month));
+            cycleStart = new Date(year, month, startDay, 0, 0, 0, 0);
+
+            const nextMonthYear = month === 11 ? year + 1 : year;
+            const nextMonth = (month + 1) % 12;
+            const endDay = Math.min(cycleDay, getDaysInMonth(nextMonthYear, nextMonth));
+            cycleEnd = new Date(nextMonthYear, nextMonth, endDay, 23, 59, 59, 999);
+        } else {
+            // Current cycle started previous month after cycleDay, ends this month on cycleDay
+            const prevMonthYear = month === 0 ? year - 1 : year;
+            const prevMonth = (month + 11) % 12;
+            const startDay = Math.min(cycleDay + 1, getDaysInMonth(prevMonthYear, prevMonth));
+            cycleStart = new Date(prevMonthYear, prevMonth, startDay, 0, 0, 0, 0);
+
+            const endDay = Math.min(cycleDay, getDaysInMonth(year, month));
+            cycleEnd = new Date(year, month, endDay, 23, 59, 59, 999);
+        }
+
+        const dueDate = new Date(cycleEnd.getTime() + (graceDays * 24 * 60 * 60 * 1000));
+        dueDate.setHours(23, 59, 59, 999);
+
+        // Days remaining
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const startOfRefDay = new Date(validDate.getFullYear(), validDate.getMonth(), validDate.getDate()).getTime();
+        const startOfCutDay = new Date(cycleEnd.getFullYear(), cycleEnd.getMonth(), cycleEnd.getDate()).getTime();
+        const startOfDueDay = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()).getTime();
+
+        const daysUntilCut = Math.max(0, Math.round((startOfCutDay - startOfRefDay) / msPerDay));
+        const daysUntilDue = Math.max(0, Math.round((startOfDueDay - startOfRefDay) / msPerDay));
+
+        return {
+            startDate: cycleStart,
+            endDate: cycleEnd,
+            dueDate: dueDate,
+            daysUntilCut,
+            daysUntilDue,
+            startDateStr: DataManager.getLocalDateString(cycleStart),
+            endDateStr: DataManager.getLocalDateString(cycleEnd),
+            dueDateStr: DataManager.getLocalDateString(dueDate)
+        };
+    },
+
+    getCardMetrics: (card, refDate = new Date()) => {
+        const account = DataManager.getAccountById(card.accountId);
+        const cycle = CreditCardManager.getCardBillingCycle(card, refDate);
+        const cycleStartMs = cycle.startDate.getTime();
+        const cycleEndMs = cycle.endDate.getTime();
+
+        // Outstanding balance:
+        // In NexFinance, credit accounts have negative balance when spent (e.g. -1500 means $1500 owed)
+        const accountBalance = account ? account.balance : 0;
+        const totalOutstanding = accountBalance < 0 ? Math.abs(accountBalance) : 0;
+
+        // Current cycle transactions
+        let cyclePurchases = 0;
+        let cyclePayments = 0;
+        let cashAdvancePurchases = 0;
+        let cashAdvanceInterest = 0;
+        let cashAdvanceFees = 0;
+        const cardTransactions = [];
+        const apr = parseFloat(card.apr) || 0;
+        const dailyRate = apr > 0 ? (apr / 100) / 365 : 0;
+        const cashAdvanceApr = (card.cashAdvanceApr !== undefined && !isNaN(parseFloat(card.cashAdvanceApr))) ? parseFloat(card.cashAdvanceApr) : (apr || 27.99);
+        const cashAdvanceDailyRate = cashAdvanceApr > 0 ? (cashAdvanceApr / 100) / 365 : 0;
+        const cashAdvanceFeeRate = ((card.cashAdvanceFee !== undefined && !isNaN(parseFloat(card.cashAdvanceFee))) ? parseFloat(card.cashAdvanceFee) : 3.0) / 100;
+
+        let priorCashAdvances = 0;
+
+        (appData.transactions || []).forEach(t => {
+            const isCardExpense = t.accountId === card.accountId && t.amount < 0;
+            const isCardPayment = (t.toAccountId === card.accountId && !t.isCashAdvance) ||
+                                  (t.targetCardId === card.id && !t.isCashAdvance) ||
+                                  (t.accountId === card.accountId && t.amount > 0) ||
+                                  (t.category && t.category.toLowerCase() === 'credit card' && (t.targetCardId === card.id || t.toAccountId === card.accountId));
+
+            if (isCardExpense || isCardPayment) {
+                cardTransactions.push(t);
+                const tDate = DataManager.parseLocalDate(t.date);
+                const tTime = tDate.getTime();
+                if (tTime >= cycleStartMs && tTime <= cycleEndMs) {
+                    if (isCardExpense) {
+                        cyclePurchases += Math.abs(t.amount);
+                        if (t.isCashAdvance) {
+                            cashAdvancePurchases += Math.abs(t.amount);
+                            const daysFromTx = Math.max(1, Math.round((cycleEndMs - tTime) / (24 * 60 * 60 * 1000)));
+                            cashAdvanceInterest += Math.abs(t.amount) * cashAdvanceDailyRate * daysFromTx;
+                            cashAdvanceFees += Math.abs(t.amount) * cashAdvanceFeeRate;
+                        }
+                    } else if (isCardPayment) {
+                        cyclePayments += Math.abs(t.amount);
+                    }
+                } else if (tTime < cycleStartMs && isCardExpense && t.isCashAdvance) {
+                    priorCashAdvances += Math.abs(t.amount);
+                }
+            }
+        });
+
+        // Carried balance from prior statement (unpaid balance before current cycle)
+        const regularPurchases = Math.max(0, cyclePurchases - cashAdvancePurchases);
+        const priorUnpaid = Math.max(0, totalOutstanding - cyclePurchases + cyclePayments);
+        const carriedCashAdvance = Math.min(priorUnpaid, priorCashAdvances);
+        const carriedRegularPurchases = Math.max(0, priorUnpaid - carriedCashAdvance);
+        const isGracePeriodActive = carriedRegularPurchases <= 0.01;
+
+        const cycleDays = Math.max(28, Math.min(31, Math.round((cycleEndMs - cycleStartMs) / (24 * 60 * 60 * 1000))));
+
+        // Cash advances accrue interest immediately with zero grace period
+        let carriedCashAdvanceInterest = 0;
+        if (carriedCashAdvance > 0 && cashAdvanceDailyRate > 0) {
+            carriedCashAdvanceInterest = carriedCashAdvance * cashAdvanceDailyRate * cycleDays;
+        }
+
+        let regularInterest = 0;
+        if (!isGracePeriodActive && apr > 0) {
+            const avgDailyRegularBalance = carriedRegularPurchases + (regularPurchases * 0.5);
+            regularInterest = avgDailyRegularBalance * dailyRate * cycleDays;
+        }
+
+        let estimatedInterest = cashAdvanceFees + cashAdvanceInterest + carriedCashAdvanceInterest + regularInterest;
+
+        const projectedStatementTotal = Math.max(0, totalOutstanding + estimatedInterest);
+
+        // Projected Minimum Due calculation
+        const minFloor = parseFloat(card.minPaymentFloor) || 25;
+        const minPercent = (parseFloat(card.minPaymentPercent) || 3.5) / 100;
+        let projectedMinDue = 0;
+        if (projectedStatementTotal > 0) {
+            const percentAmount = (projectedStatementTotal * minPercent) + estimatedInterest;
+            projectedMinDue = Math.min(projectedStatementTotal, Math.max(minFloor, percentAmount));
+        }
+
+        // Credit Utilization Rate
+        const limit = parseFloat(card.creditLimit) || 5000;
+        const utilizationRate = limit > 0 ? (totalOutstanding / limit) * 100 : 0;
+        const utilizationClamped = Math.min(100, Math.max(0, utilizationRate));
+
+        // Health Zone
+        let healthStatus = 'optimal'; // < 30%
+        let healthLabel = 'Optimal (<30%)';
+        let healthColor = 'var(--success)';
+        if (utilizationRate > 50) {
+            healthStatus = 'high';
+            healthLabel = 'High Utilization (>50%)';
+            healthColor = 'var(--danger)';
+        } else if (utilizationRate >= 30) {
+            healthStatus = 'moderate';
+            healthLabel = 'Moderate (30%-50%)';
+            healthColor = 'var(--warning)';
+        }
+
+        // Safe Spend remaining before reaching 30%
+        const safeSpendRemaining = Math.max(0, (limit * 0.30) - totalOutstanding);
+
+        // Payment required to get to 30%
+        const payToReach30 = Math.max(0, totalOutstanding - (limit * 0.30));
+
+        return {
+            totalOutstanding,
+            limit,
+            cyclePurchases,
+            cyclePayments,
+            cashAdvancePurchases,
+            cashAdvanceInterest,
+            cashAdvanceFees,
+            cashAdvanceFeePercent: cashAdvanceFeeRate * 100,
+            cashAdvanceApr,
+            priorUnpaid,
+            isGracePeriodActive,
+            estimatedInterest,
+            projectedStatementTotal,
+            projectedMinDue,
+            utilizationRate,
+            utilizationClamped,
+            healthStatus,
+            healthLabel,
+            healthColor,
+            safeSpendRemaining,
+            payToReach30,
+            cycle,
+            cardTransactions: cardTransactions.sort((a, b) => new Date(b.date) - new Date(a.date))
+        };
+    },
+
+    getAggregateMetrics: (refDate = new Date()) => {
+        const cards = CreditCardManager.getCreditCards();
+        let totalLimit = 0;
+        let totalOutstanding = 0;
+        let totalProjectedBills = 0;
+        let totalEstimatedInterest = 0;
+
+        const cardDetails = cards.map(card => {
+            const metrics = CreditCardManager.getCardMetrics(card, refDate);
+            totalLimit += metrics.limit;
+            totalOutstanding += metrics.totalOutstanding;
+            totalProjectedBills += metrics.projectedStatementTotal;
+            totalEstimatedInterest += metrics.estimatedInterest;
+            return { card, metrics };
+        });
+
+        const overallUtilization = totalLimit > 0 ? (totalOutstanding / totalLimit) * 100 : 0;
+
+        return {
+            totalLimit,
+            totalOutstanding,
+            totalProjectedBills,
+            totalEstimatedInterest,
+            overallUtilization,
+            cardCount: cards.length,
+            cardDetails
+        };
+    },
+
+    recordCardPayment: ({ fromAccountId, cardId, amount, date, note }) => {
+        const card = CreditCardManager.getCreditCardById(cardId);
+        if (!card) return false;
+
+        const payAmount = Math.abs(parseFloat(amount));
+        if (isNaN(payAmount) || payAmount <= 0) return false;
+
+        const txDate = date || DataManager.getLocalDateString();
+        const baseDescription = `Payment to ${card.name} (···${card.last4})`;
+        const description = note ? `${baseDescription} (${note})` : baseDescription;
+
+        const paymentTx = {
+            date: txDate,
+            merchant: description,
+            category: 'Credit Card',
+            amount: -payAmount,
+            accountId: parseInt(fromAccountId),
+            toAccountId: card.accountId,
+            targetCardId: card.id,
+            status: 'Completed'
+        };
+
+        DataManager.addTransaction(paymentTx);
+        return true;
+    }
+};
+
+DataManager.CreditCardManager = CreditCardManager;
+if (typeof window !== 'undefined') {
+    window.CreditCardManager = CreditCardManager;
+}
 
 // Global listener to evaluate math inputs when user leaves the field
 document.addEventListener('blur', function(e) {

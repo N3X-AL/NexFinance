@@ -1012,6 +1012,117 @@
     }
 }
 
+/* Virtual Credit Card Component */
+.virtual-card-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1.586 / 1;
+    border-radius: 16px;
+    padding: 24px;
+    color: #ffffff;
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-sizing: border-box;
+}
+
+.virtual-card-glass {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.virtual-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+.virtual-card-bank {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.virtual-card-contactless {
+    color: rgba(255, 255, 255, 0.75);
+    display: flex;
+    align-items: center;
+}
+
+.virtual-card-chip {
+    width: 44px;
+    height: 32px;
+    background: linear-gradient(135deg, #d4af37 0%, #aa820a 100%);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.virtual-card-chip::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.virtual-card-number {
+    font-family: monospace;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    position: relative;
+    z-index: 1;
+}
+
+.virtual-card-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    position: relative;
+    z-index: 1;
+}
+
+.virtual-card-sublabel {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 2px;
+}
+
+.virtual-card-holder {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 900px) {
+    div[style*="grid-template-columns: minmax(320px, 420px) 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 /* Print Styles */
 @media print {
     #sidebar,
