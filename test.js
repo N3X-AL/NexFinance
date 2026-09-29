@@ -989,6 +989,23 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(!appJsSource.includes('id="elr-account" class="form-control" required'), "elr-account select must not be required");
     console.log("✔ Loan account select non-required verification test passed!");
 
+    // Test 47: Credit Cards view projected statement bill and current balance separation
+    const ccRender = global.Views['credit-cards']();
+    assert(ccRender.includes('Projected Next Statement Bill'), "Must contain 'Projected Next Statement Bill'");
+    assert(!ccRender.includes('Projected Statement Total:'), "Must NOT contain redundant 'Projected Statement Total:'");
+    assert(ccRender.includes('Current Balance (To Clear Debt Today):'), "Must contain separated 'Current Balance (To Clear Debt Today):'");
+    assert(!ccRender.includes('Total To Pay (To Avoid Interest):'), "Must NOT contain misleading 'Total To Pay (To Avoid Interest):'");
+    assert(ccRender.includes('Pay Current Balance'), "Must include 'Pay Current Balance' button when balance exists");
+    assert(ccRender.includes('If you pay:'), "Simulator should use 'If you pay:' with live balance");
+    assert(!ccRender.includes('If you pay on due date:'), "Simulator should not use 'If you pay on due date:' with unbilled interest");
+    console.log("✔ Credit cards statement bill and current balance separation test passed!");
+
+    // Test 48: Verify showPayCreditCardModal includes Current Balance option and suggested amount support
+    assert(appJsSource.includes('showPayCreditCardModal(cardId, suggestedAmount)'), "showPayCreditCardModal should accept suggestedAmount parameter");
+    assert(appJsSource.includes('Current Balance (Live Debt):'), "Pay modal must show Current Balance");
+    assert(appJsSource.includes("Current Balance (${DataManager.formatCurrency(metrics.totalOutstanding)})"), "Pay modal must include Current Balance button");
+    console.log("✔ Pay credit card modal current balance enhancement test passed!");
+
     console.log("All tests passed successfully!");
 })();
 

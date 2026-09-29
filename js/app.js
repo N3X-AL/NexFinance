@@ -1118,7 +1118,7 @@ class App {
         }
     }
 
-    showPayCreditCardModal(cardId) {
+    showPayCreditCardModal(cardId, suggestedAmount) {
         const card = CreditCardManager.getCreditCardById(cardId);
         if (!card) return;
 
@@ -1132,6 +1132,10 @@ class App {
 
         const fromOptions = bankAccounts.map(a => `<option value="${a.id}">${DataManager.escapeHtml(a.name)} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
 
+        const defaultPayment = (suggestedAmount !== undefined && !isNaN(parseFloat(suggestedAmount)))
+            ? parseFloat(suggestedAmount)
+            : (metrics.totalOutstanding > 0 ? metrics.totalOutstanding : metrics.projectedStatementTotal);
+
         const content = `
             <form id="pay-credit-card-form">
                 <div style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
@@ -1139,9 +1143,13 @@ class App {
                         <span style="font-size: 13px; color: var(--text-secondary);">Paying Towards:</span>
                         <strong style="font-size: 14px;">${DataManager.escapeHtml(card.name)} (···${DataManager.escapeHtml(card.last4)})</strong>
                     </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Current Balance (Live Debt):</span>
+                        <strong style="font-size: 14px; color: var(--primary);">${DataManager.formatCurrency(metrics.totalOutstanding)}</strong>
+                    </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-size: 13px; color: var(--text-secondary);">Projected Statement Bill:</span>
-                        <span style="font-size: 15px; font-weight: 700; color: var(--primary);">${DataManager.formatCurrency(metrics.projectedStatementTotal)}</span>
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">${DataManager.formatCurrency(metrics.projectedStatementTotal)}</span>
                     </div>
                 </div>
 
@@ -1154,12 +1162,17 @@ class App {
 
                 <div class="form-group">
                     <label class="form-label">Payment Amount</label>
-                    <input type="text" inputmode="decimal" id="pcc-amount" class="form-control math-input" placeholder="0.00" value="${metrics.projectedStatementTotal.toFixed(2)}" required>
+                    <input type="text" inputmode="decimal" id="pcc-amount" class="form-control math-input" placeholder="0.00" value="${defaultPayment.toFixed(2)}" required>
                     
                     <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
-                        <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('pcc-amount').value = '${metrics.projectedStatementTotal.toFixed(2)}'">
-                            Full Bill (${DataManager.formatCurrency(metrics.projectedStatementTotal)})
+                        <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('pcc-amount').value = '${metrics.totalOutstanding.toFixed(2)}'">
+                            Current Balance (${DataManager.formatCurrency(metrics.totalOutstanding)})
                         </button>
+                        ${Math.abs(metrics.projectedStatementTotal - metrics.totalOutstanding) > 0.01 ? `
+                        <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('pcc-amount').value = '${metrics.projectedStatementTotal.toFixed(2)}'">
+                            Projected Bill (${DataManager.formatCurrency(metrics.projectedStatementTotal)})
+                        </button>
+                        ` : ''}
                         ${metrics.projectedMinDue > 0 ? `
                         <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('pcc-amount').value = '${metrics.projectedMinDue.toFixed(2)}'">
                             Min Due (${DataManager.formatCurrency(metrics.projectedMinDue)})

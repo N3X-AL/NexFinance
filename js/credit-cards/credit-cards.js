@@ -72,7 +72,7 @@ Views['credit-cards'] = () => {
     const cycleProgressPercent = Math.min(100, Math.round((cycleElapsedDays / cycleTotalDays) * 100));
 
     // Payoff Simulator baseline
-    const simBal = metrics.projectedStatementTotal;
+    const simBal = metrics.totalOutstanding;
     const simApr = activeCard.apr || 24.99;
     const dailyApr = (simApr / 100) / 365;
 
@@ -309,7 +309,7 @@ Views['credit-cards'] = () => {
                             <span style="font-weight: 600; color: var(--success);">${metrics.cyclePayments > 0 ? '-' : ''}${DataManager.formatCurrency(metrics.cyclePayments)}</span>
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-light); padding-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="display: flex; align-items: center; gap: 6px; color: var(--text-secondary);">
                                 Estimated Finance Charges / Interest:
                                 <span class="tag ${metrics.isGracePeriodActive && metrics.cashAdvanceInterest === 0 ? 'bg-success-light text-success' : 'bg-danger-light text-danger'}" style="font-size: 10px; padding: 2px 6px;">
@@ -321,9 +321,33 @@ Views['credit-cards'] = () => {
                             </span>
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-base); padding: 12px; border-radius: var(--radius-md); margin-top: 4px;">
-                            <span style="font-weight: 600; font-size: 14px;">Total To Pay (To Avoid Interest):</span>
-                            <span style="font-weight: 700; font-size: 16px; color: var(--primary);">${DataManager.formatCurrency(metrics.projectedStatementTotal)}</span>
+                    </div>
+
+                    <!-- Distinct Section: Current Balance to Pay Today -->
+                    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light);">
+                        <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.18); border-radius: var(--radius-md); padding: 14px 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="material-icons-round" style="font-size: 18px; color: var(--primary);">account_balance_wallet</span>
+                                    <div>
+                                        <span style="font-weight: 600; font-size: 13px; color: var(--text-primary);">Current Balance (To Clear Debt Today):</span>
+                                        <span style="font-size: 11px; color: var(--text-muted); display: block;">Actual outstanding debt on your card right now</span>
+                                    </div>
+                                </div>
+                                <span style="font-weight: 700; font-size: 17px; color: var(--primary);">${DataManager.formatCurrency(metrics.totalOutstanding)}</span>
+                            </div>
+
+                            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
+                                ${metrics.totalOutstanding > 0 
+                                    ? `Paying this amount today clears all current debt and stops daily interest from continuing to accrue before your statement cuts on ${metrics.cycle.endDateStr}.` 
+                                    : 'Your credit card has zero outstanding debt. No interest will accrue!'}
+                            </div>
+
+                            ${metrics.totalOutstanding > 0 ? `
+                            <button class="btn btn-primary btn-sm" style="margin-top: 10px; width: 100%; font-size: 12px; padding: 7px 12px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="app.showPayCreditCardModal(${activeCard.id}, ${metrics.totalOutstanding})">
+                                <span class="material-icons-round" style="font-size: 15px;">payments</span> Pay Current Balance (${DataManager.formatCurrency(metrics.totalOutstanding)})
+                            </button>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
@@ -337,13 +361,13 @@ Views['credit-cards'] = () => {
 
                     <div style="margin-bottom: 12px;">
                         <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">
-                            If you pay on due date: <strong id="sim-pay-label" style="color: var(--primary); font-size: 14px;">${DataManager.formatCurrency(metrics.projectedStatementTotal)}</strong>
+                            If you pay: <strong id="sim-pay-label" style="color: var(--primary); font-size: 14px;">${DataManager.formatCurrency(metrics.totalOutstanding)}</strong>
                         </label>
-                        <input type="range" id="sim-slider" min="0" max="${Math.max(100, Math.ceil(metrics.projectedStatementTotal))}" step="10" value="${metrics.projectedStatementTotal}" style="width: 100%; cursor: pointer;"
+                        <input type="range" id="sim-slider" min="0" max="${Math.max(100, Math.ceil(metrics.totalOutstanding))}" step="10" value="${metrics.totalOutstanding}" style="width: 100%; cursor: pointer;"
                                oninput="
                                     const val = parseFloat(this.value);
                                     document.getElementById('sim-pay-label').textContent = DataManager.formatCurrency(val);
-                                    const remaining = Math.max(0, ${metrics.projectedStatementTotal} - val);
+                                    const remaining = Math.max(0, ${metrics.totalOutstanding} - val);
                                     const estInterest = remaining > 0 ? (remaining * ${dailyApr} * 30) : 0;
                                     document.getElementById('sim-remaining-val').textContent = DataManager.formatCurrency(remaining);
                                     document.getElementById('sim-interest-val').textContent = DataManager.formatCurrency(estInterest);
