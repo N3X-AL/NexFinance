@@ -950,6 +950,45 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(harryRepayTx.accountId === georgeCheckingAcc.id, "Harry repayment transaction must remain on checking account");
     console.log("✔ editLoanRepayment given loan credit card guard test passed!");
 
+    // Test 44: String account ID credit card guard in addLoan and isCreditCardAccount
+    assert(global.DataManager.isCreditCardAccount(String(loanTestCard.accountId)) === true, "isCreditCardAccount must return true for string card account ID");
+    assert(global.DataManager.isCreditCardAccount(loanTestCard.accountId) === true, "isCreditCardAccount must return true for numeric card account ID");
+    assert(global.DataManager.isCreditCardAccount(String(georgeCheckingAcc.id)) === false, "isCreditCardAccount must return false for checking account string ID");
+
+    const stringCardReceivedLoan = global.DataManager.addLoan({
+        person: 'StringCardBorrower',
+        amount: 50,
+        type: 'received',
+        date: '2026-09-11',
+        settlementType: 'cash'
+    }, String(loanTestCard.accountId));
+    assert(stringCardReceivedLoan === false, "addLoan must reject receiving loan onto credit card even when ID is passed as string");
+    assert(!global.appData.loans.some(l => l.person === 'StringCardBorrower'), "String card borrower loan must not be created");
+    console.log("✔ String account ID credit card guard test passed!");
+
+    // Test 45: Direct loan settlement succeeds without transaction even if card ID is provided
+    const directLoanResult = global.DataManager.addLoan({
+        person: 'DirectBorrower',
+        amount: 150,
+        type: 'received',
+        date: '2026-09-12',
+        settlementType: 'direct'
+    }, String(loanTestCard.accountId));
+    assert(directLoanResult !== false, "addLoan must allow direct settlement even if a card account ID was supplied");
+    const directLoan = global.appData.loans.find(l => l.person === 'DirectBorrower');
+    assert(directLoan !== undefined && directLoan.settlementType === 'direct', "Direct loan must be created");
+    const directTx = global.appData.transactions.find(t => t.loanId === directLoan.id);
+    assert(directTx === undefined, "Direct loan must not create any account transaction");
+    console.log("✔ Direct loan settlement with card ID test passed!");
+
+    // Test 46: Verify select fields in app.js do not have required attribute preventing direct settlement
+    const appJsSource = fs.readFileSync('./js/app.js', 'utf8');
+    assert(!appJsSource.includes('id="l-account" class="form-control" required'), "l-account select must not be required");
+    assert(!appJsSource.includes('id="e-account" class="form-control" required'), "e-account select must not be required");
+    assert(!appJsSource.includes('id="r-account" class="form-control" required'), "r-account select must not be required");
+    assert(!appJsSource.includes('id="elr-account" class="form-control" required'), "elr-account select must not be required");
+    console.log("✔ Loan account select non-required verification test passed!");
+
     console.log("All tests passed successfully!");
 })();
 

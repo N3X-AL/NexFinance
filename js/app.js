@@ -1288,7 +1288,7 @@ class App {
                 ${settlementField}
                 <div class="form-group" id="loan-account-group">
                     <label class="form-label">Account / Payment Method</label>
-                    <select id="l-account" class="form-control" required onchange="
+                    <select id="l-account" class="form-control" onchange="
                         const isCredit = (typeof DataManager !== 'undefined') && DataManager.isCreditCardAccount(parseInt(this.value));
                         const hint = document.getElementById('loan-card-hint');
                         if (hint) hint.style.display = isCredit ? 'block' : 'none';
@@ -1309,10 +1309,12 @@ class App {
 
             const settlementEl = document.getElementById('l-settlement');
             const settlementType = settlementEl ? settlementEl.value : 'cash';
-            const accountId = parseInt(document.getElementById('l-account').value);
+            const accSelect = document.getElementById('l-account');
+            if (accSelect) accSelect.setCustomValidity('');
+
+            const accountId = parseInt(accSelect ? accSelect.value : '');
 
             if (settlementType !== 'direct' && (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId))) {
-                const accSelect = document.getElementById('l-account');
                 if (accSelect) {
                     accSelect.setCustomValidity('Please select a valid account.');
                     accSelect.reportValidity();
@@ -1376,7 +1378,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Account / Payment Method</label>
-                    <select id="e-account" class="form-control" required onchange="
+                    <select id="e-account" class="form-control" onchange="
                         const isCredit = (typeof DataManager !== 'undefined') && DataManager.isCreditCardAccount(parseInt(this.value));
                         const hint = document.getElementById('edit-loan-card-hint');
                         if (hint) hint.style.display = isCredit ? 'block' : 'none';
@@ -1395,9 +1397,12 @@ class App {
                 return false;
             }
 
-            const accountId = parseInt(document.getElementById('e-account').value);
-            if (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId)) {
-                const accSelect = document.getElementById('e-account');
+            const isDirect = loan.settlementType === 'direct';
+            const accSelect = document.getElementById('e-account');
+            if (accSelect) accSelect.setCustomValidity('');
+
+            const accountId = isDirect ? null : parseInt(accSelect ? accSelect.value : '');
+            if (!isDirect && (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId))) {
                 if (accSelect) {
                     accSelect.setCustomValidity('Please select a valid account.');
                     accSelect.reportValidity();
@@ -1462,7 +1467,7 @@ class App {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Account / Payment Method</label>
-                    <select id="elr-account" class="form-control" required onchange="
+                    <select id="elr-account" class="form-control" onchange="
                         const isCredit = (typeof DataManager !== 'undefined') && DataManager.isCreditCardAccount(parseInt(this.value));
                         const hint = document.getElementById('edit-repay-card-hint');
                         if (hint) hint.style.display = isCredit ? 'block' : 'none';
@@ -1481,9 +1486,11 @@ class App {
                 return false;
             }
 
-            const accountId = parseInt(document.getElementById('elr-account').value);
+            const accSelect = document.getElementById('elr-account');
+            if (accSelect) accSelect.setCustomValidity('');
+
+            const accountId = parseInt(accSelect ? accSelect.value : '');
             if (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId)) {
-                const accSelect = document.getElementById('elr-account');
                 if (accSelect) {
                     accSelect.setCustomValidity('Please select a valid account.');
                     accSelect.reportValidity();
@@ -1557,7 +1564,7 @@ class App {
                 </div>
                 <div class="form-group" id="repay-account-group">
                     <label class="form-label">Account (to receive/send funds)</label>
-                    <select id="r-account" class="form-control" required onchange="
+                    <select id="r-account" class="form-control" onchange="
                         const isCredit = (typeof DataManager !== 'undefined') && DataManager.isCreditCardAccount(parseInt(this.value));
                         const hint = document.getElementById('repay-card-hint');
                         if (hint) hint.style.display = isCredit ? 'block' : 'none';
@@ -1577,10 +1584,12 @@ class App {
             }
 
             const isDirectPayment = document.getElementById('r-settlement').value === 'direct';
-            const accountId = parseInt(document.getElementById('r-account').value);
+            const accSelect = document.getElementById('r-account');
+            if (accSelect) accSelect.setCustomValidity('');
+
+            const accountId = isDirectPayment ? null : parseInt(accSelect ? accSelect.value : '');
 
             if (!isDirectPayment && (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId))) {
-                const accSelect = document.getElementById('r-account');
                 if (accSelect) {
                     accSelect.setCustomValidity('Please select a valid account.');
                     accSelect.reportValidity();
