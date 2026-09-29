@@ -1215,10 +1215,48 @@ class App {
         });
     }
 
+    _buildLoanAccountOptions(type, selectedId = null) {
+        if (type === 'received') {
+            const nonCreditAccounts = appData.accounts.filter(a => a.type !== 'Credit');
+            if (nonCreditAccounts.length === 0) {
+                return `<option value="" disabled selected>No eligible bank account (credit cards cannot receive loans)</option>`;
+            }
+            return nonCreditAccounts.map(a => 
+                `<option value="${a.id}" ${selectedId && a.id === parseInt(selectedId) ? 'selected' : ''}>${DataManager.escapeHtml(a.name)} (${DataManager.formatCurrency(a.balance)})</option>`
+            ).join('');
+        } else {
+            const bankAccounts = appData.accounts.filter(a => a.type !== 'Credit');
+            const creditAccounts = appData.accounts.filter(a => a.type === 'Credit');
+            let html = '';
+            if (bankAccounts.length > 0) {
+                html += `<optgroup label="Bank & Cash Accounts">` +
+                    bankAccounts.map(a => `<option value="${a.id}" ${selectedId && a.id === parseInt(selectedId) ? 'selected' : ''}>${DataManager.escapeHtml(a.name)} (${DataManager.formatCurrency(a.balance)})</option>`).join('') +
+                    `</optgroup>`;
+            }
+            if (creditAccounts.length > 0) {
+                html += `<optgroup label="Credit Cards (Purchased on Card)">` +
+                    creditAccounts.map(a => {
+                        const card = (typeof CreditCardManager !== 'undefined') ? CreditCardManager.getCreditCardByAccountId(a.id) : null;
+                        const available = card ? Math.max(0, card.creditLimit + (parseFloat(a.balance) || 0)) : 0;
+                        const last4Str = card && card.last4 ? ` ···${DataManager.escapeHtml(card.last4)}` : '';
+                        return `<option value="${a.id}" ${selectedId && a.id === parseInt(selectedId) ? 'selected' : ''}>${DataManager.escapeHtml(a.name)}${last4Str} (Available: ${DataManager.formatCurrency(available)})</option>`;
+                    }).join('') +
+                    `</optgroup>`;
+            }
+            return html;
+        }
+    }
+
     showAddLoanModal(type, prefillPerson = '') {
         const title = type === 'given' ? 'I Lent Money / Paid for someone' : 'I Borrowed Money / Someone paid for me';
         const personLabel = type === 'given' ? 'Who did you lend to or pay for?' : 'Who did you borrow from or who paid for you?';
-        const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const accountOptions = this._buildLoanAccountOptions(type);
+
+        const cardHint = type === 'given' ? `
+            <div id="loan-card-hint" style="display: none; margin-top: 8px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; background: rgba(99, 102, 241, 0.08); padding: 10px; border-radius: var(--radius-sm); border-left: 3px solid var(--primary);">
+                <span class="material-icons-round" style="font-size: 15px; vertical-align: -3px; color: var(--primary); margin-right: 4px;">credit_card</span>
+                <strong>Credit Card Purchase:</strong> Lending from this card will be recorded as a card purchase in your current billing cycle, updating your card balance, utilization, and statement bill.
+            </div>` : '';
 
         const settlementField = type === 'received' ? `
                 <div class="form-group">
@@ -1249,10 +1287,15 @@ class App {
                 </div>
                 ${settlementField}
                 <div class="form-group" id="loan-account-group">
-                    <label class="form-label">Account (for the transfer)</label>
-                    <select id="l-account" class="form-control">
+                    <label class="form-label">Account / Payment Method</label>
+                    <select id="l-account" class="form-control" onchange="
+                        const isCredit = (typeof DataManager !== 'undefined') && DataManager.isCreditCardAccount(parseInt(this.value));
+                        const hint = document.getElementById('loan-card-hint');
+                        if (hint) hint.style.display = isCredit ? 'block' : 'none';
+                    ">
                         ${accountOptions}
                     </select>
+                    ${cardHint}
                 </div>
             </form>
         `;
@@ -1265,6 +1308,20 @@ class App {
             }
 
             const settlementEl = document.getElementById('l-settlement');
+            const settlementType = settlementEl ? settlementEl.value : 'cash';
+            const accSelect = document.getElementById('l-account');
+            if (accSelect) accSelect.setCustomValidity('');
+
+            const accountId = parseInt(accSelect ? accSelect.value : '');
+
+            if (settlementType !== 'direct' && (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId))) {
+                if (accSelect) {
+                    accSelect.setCustomValidity('Please select a valid account.');
+                    accSelect.reportValidity();
+                }
+                return false;
+            }
+
             const loan = {
                 person: document.getElementById('l-person').value,
                 description: document.getElementById('l-description').value,
@@ -1272,16 +1329,21 @@ class App {
                 date: document.getElementById('l-date').value,
                 type: type,
                 // Lending always deducts from the account; settlement type only applies when borrowing
-                settlementType: settlementEl ? settlementEl.value : 'cash'
+                settlementType: settlementType
             };
-            
-            // if direct payment, account isn't used, but we still pass one so it doesn't break.
-            const accountId = parseInt(document.getElementById('l-account').value);
 
             DataManager.addLoan(loan, accountId);
             this.navigate(this.currentRoute);
             return true;
         });
+
+        setTimeout(() => {
+            const accEl = document.getElementById('l-account');
+            const hintEl = document.getElementById('loan-card-hint');
+            if (accEl && hintEl && typeof DataManager !== 'undefined') {
+                hintEl.style.display = DataManager.isCreditCardAccount(parseInt(accEl.value)) ? 'block' : 'none';
+            }
+        }, 10);
     }
 
     showEditLoanModal(loanId) {
@@ -1291,7 +1353,13 @@ class App {
         const originalTx = DataManager.findLoanDisbursementTransaction(loanId);
         const originalAccountId = originalTx ? parseInt(originalTx.accountId) : null;
 
-        const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === originalAccountId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        const accountOptions = this._buildLoanAccountOptions(loan.type, originalAccountId);
+
+        const cardHint = loan.type === 'given' ? `
+            <div id="edit-loan-card-hint" style="display: none; margin-top: 8px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; background: rgba(99, 102, 241, 0.08); padding: 10px; border-radius: var(--radius-sm); border-left: 3px solid var(--primary);">
+                <span class="material-icons-round" style="font-size: 15px; vertical-align: -3px; color: var(--primary); margin-right: 4px;">credit_card</span>
+                <strong>Credit Card Purchase:</strong> Lending from this card will be recorded as a card purchase in your current billing cycle, updating your card balance, utilization, and statement bill.
+            </div>` : '';
 
         const content = `
             <form id="edit-loan-form">
@@ -1309,10 +1377,15 @@ class App {
                     <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Settled amount so far: ${DataManager.formatCurrency(loan.settledAmount)}</small>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Account</label>
-                    <select id="e-account" class="form-control">
+                    <label class="form-label">Account / Payment Method</label>
+                    <select id="e-account" class="form-control" onchange="
+                        const isCredit = (typeof DataManager !== 'undefined') && DataManager.isCreditCardAccount(parseInt(this.value));
+                        const hint = document.getElementById('edit-loan-card-hint');
+                        if (hint) hint.style.display = isCredit ? 'block' : 'none';
+                    ">
                         ${accountOptions}
                     </select>
+                    ${cardHint}
                 </div>
             </form>
         `;
@@ -1324,15 +1397,35 @@ class App {
                 return false;
             }
 
+            const isDirect = loan.settlementType === 'direct';
+            const accSelect = document.getElementById('e-account');
+            if (accSelect) accSelect.setCustomValidity('');
+
+            const accountId = isDirect ? null : parseInt(accSelect ? accSelect.value : '');
+            if (!isDirect && (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId))) {
+                if (accSelect) {
+                    accSelect.setCustomValidity('Please select a valid account.');
+                    accSelect.reportValidity();
+                }
+                return false;
+            }
+
             const person = document.getElementById('e-person').value;
             const description = document.getElementById('e-description').value;
             const amount = parseFloat(document.getElementById('e-amount').value);
-            const accountId = parseInt(document.getElementById('e-account').value);
 
             DataManager.updateLoan(loanId, { person, description, amount }, accountId);
             this.navigate(this.currentRoute);
             return true;
         });
+
+        setTimeout(() => {
+            const accEl = document.getElementById('e-account');
+            const hintEl = document.getElementById('edit-loan-card-hint');
+            if (accEl && hintEl && typeof DataManager !== 'undefined') {
+                hintEl.style.display = DataManager.isCreditCardAccount(parseInt(accEl.value)) ? 'block' : 'none';
+            }
+        }, 10);
     }
 
 
@@ -1342,7 +1435,21 @@ class App {
         if (!tx || !loan) return;
 
         const absAmount = Math.abs(tx.amount);
-        const accountOptions = appData.accounts.map(a => `<option value="${a.id}" ${a.id === tx.accountId ? 'selected' : ''}>${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        let accountOptions = '';
+        if (loan.type === 'given') {
+            const eligibleAccounts = appData.accounts.filter(a => a.type !== 'Credit');
+            accountOptions = eligibleAccounts.length > 0
+                ? eligibleAccounts.map(a => `<option value="${a.id}" ${a.id === tx.accountId ? 'selected' : ''}>${DataManager.escapeHtml(a.name)} (${DataManager.formatCurrency(a.balance)})</option>`).join('')
+                : `<option value="" disabled selected>No eligible bank account found</option>`;
+        } else {
+            accountOptions = this._buildLoanAccountOptions('given', tx.accountId);
+        }
+
+        const cardHint = loan.type === 'received' ? `
+            <div id="edit-repay-card-hint" style="display: none; margin-top: 8px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; background: rgba(99, 102, 241, 0.08); padding: 10px; border-radius: var(--radius-sm); border-left: 3px solid var(--primary);">
+                <span class="material-icons-round" style="font-size: 15px; vertical-align: -3px; color: var(--primary); margin-right: 4px;">credit_card</span>
+                <strong>Credit Card Purchase:</strong> Repaying this loan from your card will be recorded as a card purchase in your current billing cycle.
+            </div>` : '';
 
         const content = `
             <form id="edit-loan-repayment-form">
@@ -1359,10 +1466,15 @@ class App {
                     <input type="text" inputmode="decimal" id="elr-amount" class="form-control math-input" value="${absAmount}" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Account</label>
-                    <select id="elr-account" class="form-control">
+                    <label class="form-label">Account / Payment Method</label>
+                    <select id="elr-account" class="form-control" onchange="
+                        const isCredit = (typeof DataManager !== 'undefined') && DataManager.isCreditCardAccount(parseInt(this.value));
+                        const hint = document.getElementById('edit-repay-card-hint');
+                        if (hint) hint.style.display = isCredit ? 'block' : 'none';
+                    ">
                         ${accountOptions}
                     </select>
+                    ${cardHint}
                 </div>
             </form>
         `;
@@ -1374,24 +1486,60 @@ class App {
                 return false;
             }
 
+            const accSelect = document.getElementById('elr-account');
+            if (accSelect) accSelect.setCustomValidity('');
+
+            const accountId = parseInt(accSelect ? accSelect.value : '');
+            if (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId)) {
+                if (accSelect) {
+                    accSelect.setCustomValidity('Please select a valid account.');
+                    accSelect.reportValidity();
+                }
+                return false;
+            }
+
             const date = document.getElementById('elr-date').value;
             const description = document.getElementById('elr-description').value;
             const amount = parseFloat(document.getElementById('elr-amount').value);
-            const accountId = parseInt(document.getElementById('elr-account').value);
 
             DataManager.editLoanRepayment(transactionId, loanId, { date, description, amount, accountId });
             this.navigate(this.currentRoute);
             return true;
         });
+
+        if (loan.type === 'received') {
+            setTimeout(() => {
+                const accEl = document.getElementById('elr-account');
+                const hintEl = document.getElementById('edit-repay-card-hint');
+                if (accEl && hintEl && typeof DataManager !== 'undefined') {
+                    hintEl.style.display = DataManager.isCreditCardAccount(parseInt(accEl.value)) ? 'block' : 'none';
+                }
+            }, 10);
+        }
     }
 
     showRecordRepaymentModal(loanId) {
-
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
 
         const remaining = loan.amount - loan.settledAmount;
-        const accountOptions = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${DataManager.formatCurrency(a.balance)})</option>`).join('');
+        let accountOptions = '';
+        if (loan.type === 'given') {
+            // Cannot receive repayment into a credit card
+            const eligibleAccounts = appData.accounts.filter(a => a.type !== 'Credit');
+            accountOptions = eligibleAccounts.length > 0 
+                ? eligibleAccounts.map(a => `<option value="${a.id}">${DataManager.escapeHtml(a.name)} (${DataManager.formatCurrency(a.balance)})</option>`).join('')
+                : `<option value="" disabled selected>No eligible bank account found</option>`;
+        } else {
+            // Repaying a received loan sends funds: can use bank accounts or credit cards
+            accountOptions = this._buildLoanAccountOptions('given');
+        }
+
+        const cardHint = loan.type === 'received' ? `
+            <div id="repay-card-hint" style="display: none; margin-top: 8px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; background: rgba(99, 102, 241, 0.08); padding: 10px; border-radius: var(--radius-sm); border-left: 3px solid var(--primary);">
+                <span class="material-icons-round" style="font-size: 15px; vertical-align: -3px; color: var(--primary); margin-right: 4px;">credit_card</span>
+                <strong>Credit Card Purchase:</strong> Repaying this loan from your card will be recorded as a card purchase in your current billing cycle.
+            </div>` : '';
 
         const content = `
             <form id="record-repayment-form">
@@ -1416,9 +1564,14 @@ class App {
                 </div>
                 <div class="form-group" id="repay-account-group">
                     <label class="form-label">Account (to receive/send funds)</label>
-                    <select id="r-account" class="form-control">
+                    <select id="r-account" class="form-control" onchange="
+                        const isCredit = (typeof DataManager !== 'undefined') && DataManager.isCreditCardAccount(parseInt(this.value));
+                        const hint = document.getElementById('repay-card-hint');
+                        if (hint) hint.style.display = isCredit ? 'block' : 'none';
+                    ">
                         ${accountOptions}
                     </select>
+                    ${cardHint}
                 </div>
             </form>
         `;
@@ -1430,16 +1583,38 @@ class App {
                 return false;
             }
 
+            const isDirectPayment = document.getElementById('r-settlement').value === 'direct';
+            const accSelect = document.getElementById('r-account');
+            if (accSelect) accSelect.setCustomValidity('');
+
+            const accountId = isDirectPayment ? null : parseInt(accSelect ? accSelect.value : '');
+
+            if (!isDirectPayment && (isNaN(accountId) || !accountId || !appData.accounts.some(a => a.id === accountId))) {
+                if (accSelect) {
+                    accSelect.setCustomValidity('Please select a valid account.');
+                    accSelect.reportValidity();
+                }
+                return false;
+            }
+
             const date = document.getElementById('r-date').value || DataManager.getLocalDateString();
             const amount = parseFloat(document.getElementById('r-amount').value);
-            const accountId = parseInt(document.getElementById('r-account').value);
-            const isDirectPayment = document.getElementById('r-settlement').value === 'direct';
             const description = document.getElementById('r-description').value;
 
             DataManager.recordLoanRepayment(loanId, amount, accountId, isDirectPayment, description, date);
             this.navigate(this.currentRoute);
             return true;
         });
+
+        if (loan.type === 'received') {
+            setTimeout(() => {
+                const accEl = document.getElementById('r-account');
+                const hintEl = document.getElementById('repay-card-hint');
+                if (accEl && hintEl && typeof DataManager !== 'undefined') {
+                    hintEl.style.display = DataManager.isCreditCardAccount(parseInt(accEl.value)) ? 'block' : 'none';
+                }
+            }, 10);
+        }
     }
 
     async handleFileUpload(event) {

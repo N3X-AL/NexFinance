@@ -172,10 +172,12 @@ const DataManager = {
     },
 
     isCreditCardAccount: (accountId) => {
-        if (!accountId) return false;
-        const acc = (appData.accounts || []).find(a => a.id === accountId);
+        if (accountId === undefined || accountId === null || accountId === '') return false;
+        const id = parseInt(accountId);
+        if (isNaN(id)) return false;
+        const acc = (appData.accounts || []).find(a => a.id === id);
         if (acc && acc.type === 'Credit') return true;
-        if ((appData.creditCards || []).some(c => c.accountId === accountId)) return true;
+        if ((appData.creditCards || []).some(c => c.accountId === id)) return true;
         return false;
     },
 
@@ -938,6 +940,15 @@ const DataManager = {
     },
     
     addLoan: (loan, accountId) => {
+        const parsedAccountId = (accountId !== undefined && accountId !== null && accountId !== '') ? parseInt(accountId) : NaN;
+        if (loan.settlementType !== 'direct' && (isNaN(parsedAccountId) || !appData.accounts.some(a => a.id === parsedAccountId))) {
+            console.warn("Valid account required for non-direct loan settlement.");
+            return false;
+        }
+        if (loan.type === 'received' && loan.settlementType !== 'direct' && DataManager.isCreditCardAccount(parsedAccountId)) {
+            console.warn("Cannot receive a loan into a credit card account.");
+            return false;
+        }
         let remainingAmount = loan.amount;
         const targetType = loan.type;
         const oppositeType = targetType === 'given' ? 'received' : 'given';
@@ -957,7 +968,7 @@ const DataManager = {
             
             const isDirectPayment = loan.settlementType === 'direct';
             // Recording an auto-repayment. If the current new loan is direct payment, the offset is direct too.
-            DataManager.recordLoanRepayment(opLoan.id, offset, accountId, isDirectPayment, `Offset against new loan: ${loan.description || ''}`, loan.date);
+            DataManager.recordLoanRepayment(opLoan.id, offset, parsedAccountId, isDirectPayment, `Offset against new loan: ${loan.description || ''}`, loan.date);
             remainingAmount -= offset;
         }
 
@@ -983,7 +994,7 @@ const DataManager = {
                     merchant: merchant,
                     category: 'Loan',
                     amount: amount,
-                    accountId: accountId,
+                    accountId: parsedAccountId,
                     status: 'Completed',
                     loanId: newId
                 });
@@ -1035,6 +1046,17 @@ const DataManager = {
         const loan = appData.loans.find(l => l.id === loanId);
         if (txIndex === -1 || !loan) return false;
 
+        const newAccountId = parseInt(updatedData.accountId);
+        if (isNaN(newAccountId) || !appData.accounts.some(a => a.id === newAccountId)) {
+            console.warn("Valid account required for loan repayment edit.");
+            return false;
+        }
+
+        if (loan.type === 'given' && DataManager.isCreditCardAccount(newAccountId)) {
+            console.warn("Cannot receive loan repayment into a credit card account.");
+            return false;
+        }
+
         const oldTx = appData.transactions[txIndex];
         const oldAbsAmount = Math.abs(oldTx.amount);
         const newAbsAmount = updatedData.amount;
@@ -1084,9 +1106,21 @@ const DataManager = {
     },
 
     updateLoan: (loanId, newData, accountId) => {
-
         const loan = appData.loans.find(l => l.id === loanId);
-        if (!loan) return;
+        if (!loan) return false;
+
+        const isDirect = loan.settlementType === 'direct';
+        const targetAccountId = (accountId !== undefined && accountId !== null && accountId !== '') ? parseInt(accountId) : null;
+        if (!isDirect && targetAccountId !== null) {
+            if (isNaN(targetAccountId) || !appData.accounts.some(a => a.id === targetAccountId)) {
+                console.warn("Valid account required for loan update.");
+                return false;
+            }
+            if (loan.type === 'received' && DataManager.isCreditCardAccount(targetAccountId)) {
+                console.warn("Cannot move a received loan onto a credit card account.");
+                return false;
+            }
+        }
 
         const amountDiff = newData.amount - loan.amount;
 
@@ -1103,12 +1137,12 @@ const DataManager = {
 
         // If the account changed, move the original disbursement transaction to the new account
         const originalTx = DataManager.findLoanDisbursementTransaction(loanId);
-        if (originalTx && parseInt(originalTx.accountId) !== parseInt(accountId)) {
-            DataManager.editTransaction(originalTx.id, { accountId: accountId, amount: originalTx.amount });
+        if (originalTx && targetAccountId !== null && parseInt(originalTx.accountId) !== targetAccountId) {
+            DataManager.editTransaction(originalTx.id, { accountId: targetAccountId, amount: originalTx.amount });
         }
 
         // Log the difference if amount changed
-        if (amountDiff !== 0) {
+        if (amountDiff !== 0 && !isDirect && targetAccountId !== null) {
             // "given" means I gave them money. If new amount > old amount (amountDiff > 0), I gave MORE money.
             // If I gave more, it subtracts from my account (-amountDiff).
             // If loan is "received" (I borrowed money), and new amount > old amount, I received MORE money.
@@ -1122,7 +1156,7 @@ const DataManager = {
                 merchant: `Loan ${actionText} (${merchantPrefix}): ${loan.person}`,
                 category: 'Loan',
                 amount: txAmount,
-                accountId: accountId,
+                accountId: targetAccountId,
                 status: 'Completed',
                 loanId: loanId
             });
@@ -1133,7 +1167,19 @@ const DataManager = {
 
     recordLoanRepayment: (loanId, amount, accountId, isDirectPayment = false, description = '', date = null) => {
         const loan = appData.loans.find(l => l.id === loanId);
-        if (!loan) return;
+        if (!loan) return false;
+        
+        const parsedAccountId = (accountId !== undefined && accountId !== null && accountId !== '') ? parseInt(accountId) : NaN;
+
+        if (!isDirectPayment && (isNaN(parsedAccountId) || !appData.accounts.some(a => a.id === parsedAccountId))) {
+            console.warn("Valid account required for non-direct loan repayment.");
+            return false;
+        }
+
+        if (loan.type === 'given' && !isDirectPayment && DataManager.isCreditCardAccount(parsedAccountId)) {
+            console.warn("Cannot receive loan repayment into a credit card account.");
+            return false;
+        }
         
         const repaymentDate = date || DataManager.getLocalDateString();
         const remaining = loan.amount - loan.settledAmount;
@@ -1160,7 +1206,7 @@ const DataManager = {
                 merchant: merchant,
                 category: 'Loan',
                 amount: txAmount,
-                accountId: accountId,
+                accountId: parsedAccountId,
                 status: 'Completed',
                 loanId: loanId
             });
@@ -1175,7 +1221,7 @@ const DataManager = {
                 date: repaymentDate,
                 description: description || `Overpayment from loan #${loan.id}`,
                 settlementType: isDirectPayment ? 'direct' : 'cash'
-            }, accountId);
+            }, parsedAccountId);
         }
         
         DataManager.saveData();
@@ -1605,7 +1651,7 @@ const CreditCardManager = {
         (appData.transactions || []).forEach(t => {
             const isCardExpense = t.accountId === card.accountId && t.amount < 0;
             const isCardPayment = (t.toAccountId === card.accountId && !t.isCashAdvance) ||
-                                  (t.targetCardId === card.id && !t.isCashAdvance) ||
+                                  (t.targetCardId === card.id && t.accountId !== card.accountId && !t.isCashAdvance) ||
                                   (t.accountId === card.accountId && t.amount > 0) ||
                                   (t.category && t.category.toLowerCase() === 'credit card' && (t.targetCardId === card.id || t.toAccountId === card.accountId));
 
