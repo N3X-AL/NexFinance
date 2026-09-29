@@ -309,7 +309,7 @@ Views['credit-cards'] = () => {
                             <span style="font-weight: 600; color: var(--success);">${metrics.cyclePayments > 0 ? '-' : ''}${DataManager.formatCurrency(metrics.cyclePayments)}</span>
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-light); padding-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="display: flex; align-items: center; gap: 6px; color: var(--text-secondary);">
                                 Estimated Finance Charges / Interest:
                                 <span class="tag ${metrics.isGracePeriodActive && metrics.cashAdvanceInterest === 0 ? 'bg-success-light text-success' : 'bg-danger-light text-danger'}" style="font-size: 10px; padding: 2px 6px;">
