@@ -72,7 +72,7 @@ Views['credit-cards'] = () => {
     const cycleProgressPercent = Math.min(100, Math.round((cycleElapsedDays / cycleTotalDays) * 100));
 
     // Payoff Simulator baseline
-    const simBal = metrics.projectedStatementTotal;
+    const simBal = metrics.totalOutstanding;
     const simApr = activeCard.apr || 24.99;
     const dailyApr = (simApr / 100) / 365;
 
@@ -361,13 +361,13 @@ Views['credit-cards'] = () => {
 
                     <div style="margin-bottom: 12px;">
                         <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">
-                            If you pay on due date: <strong id="sim-pay-label" style="color: var(--primary); font-size: 14px;">${DataManager.formatCurrency(metrics.projectedStatementTotal)}</strong>
+                            If you pay: <strong id="sim-pay-label" style="color: var(--primary); font-size: 14px;">${DataManager.formatCurrency(metrics.totalOutstanding)}</strong>
                         </label>
-                        <input type="range" id="sim-slider" min="0" max="${Math.max(100, Math.ceil(metrics.projectedStatementTotal))}" step="10" value="${metrics.projectedStatementTotal}" style="width: 100%; cursor: pointer;"
+                        <input type="range" id="sim-slider" min="0" max="${Math.max(100, Math.ceil(metrics.totalOutstanding))}" step="10" value="${metrics.totalOutstanding}" style="width: 100%; cursor: pointer;"
                                oninput="
                                     const val = parseFloat(this.value);
                                     document.getElementById('sim-pay-label').textContent = DataManager.formatCurrency(val);
-                                    const remaining = Math.max(0, ${metrics.projectedStatementTotal} - val);
+                                    const remaining = Math.max(0, ${metrics.totalOutstanding} - val);
                                     const estInterest = remaining > 0 ? (remaining * ${dailyApr} * 30) : 0;
                                     document.getElementById('sim-remaining-val').textContent = DataManager.formatCurrency(remaining);
                                     document.getElementById('sim-interest-val').textContent = DataManager.formatCurrency(estInterest);

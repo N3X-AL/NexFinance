@@ -996,6 +996,8 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(ccRender.includes('Current Balance (To Clear Debt Today):'), "Must contain separated 'Current Balance (To Clear Debt Today):'");
     assert(!ccRender.includes('Total To Pay (To Avoid Interest):'), "Must NOT contain misleading 'Total To Pay (To Avoid Interest):'");
     assert(ccRender.includes('Pay Current Balance'), "Must include 'Pay Current Balance' button when balance exists");
+    assert(ccRender.includes('If you pay:'), "Simulator should use 'If you pay:' with live balance");
+    assert(!ccRender.includes('If you pay on due date:'), "Simulator should not use 'If you pay on due date:' with unbilled interest");
     console.log("✔ Credit cards statement bill and current balance separation test passed!");
 
     // Test 48: Verify showPayCreditCardModal includes Current Balance option and suggested amount support
