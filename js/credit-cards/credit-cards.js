@@ -321,10 +321,6 @@ Views['credit-cards'] = () => {
                             </span>
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-base); padding: 12px; border-radius: var(--radius-md); margin-top: 4px;">
-                            <span style="font-weight: 600; font-size: 14px;">Projected Statement Total:</span>
-                            <span style="font-weight: 700; font-size: 16px; color: var(--text-primary);">${DataManager.formatCurrency(metrics.projectedStatementTotal)}</span>
-                        </div>
                     </div>
 
                     <!-- Distinct Section: Current Balance to Pay Today -->

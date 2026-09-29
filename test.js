@@ -989,13 +989,14 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(!appJsSource.includes('id="elr-account" class="form-control" required'), "elr-account select must not be required");
     console.log("✔ Loan account select non-required verification test passed!");
 
-    // Test 47: Credit Cards view projected statement total and current balance separation
+    // Test 47: Credit Cards view projected statement bill and current balance separation
     const ccRender = global.Views['credit-cards']();
-    assert(ccRender.includes('Projected Statement Total:'), "Must contain 'Projected Statement Total:'");
+    assert(ccRender.includes('Projected Next Statement Bill'), "Must contain 'Projected Next Statement Bill'");
+    assert(!ccRender.includes('Projected Statement Total:'), "Must NOT contain redundant 'Projected Statement Total:'");
     assert(ccRender.includes('Current Balance (To Clear Debt Today):'), "Must contain separated 'Current Balance (To Clear Debt Today):'");
     assert(!ccRender.includes('Total To Pay (To Avoid Interest):'), "Must NOT contain misleading 'Total To Pay (To Avoid Interest):'");
     assert(ccRender.includes('Pay Current Balance'), "Must include 'Pay Current Balance' button when balance exists");
-    console.log("✔ Credit cards statement total and current balance separation test passed!");
+    console.log("✔ Credit cards statement bill and current balance separation test passed!");
 
     // Test 48: Verify showPayCreditCardModal includes Current Balance option and suggested amount support
     assert(appJsSource.includes('showPayCreditCardModal(cardId, suggestedAmount)'), "showPayCreditCardModal should accept suggestedAmount parameter");
