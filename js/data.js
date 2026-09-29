@@ -938,6 +938,10 @@ const DataManager = {
     },
     
     addLoan: (loan, accountId) => {
+        if (loan.type === 'received' && DataManager.isCreditCardAccount(accountId)) {
+            console.warn("Cannot receive a loan into a credit card account.");
+            return false;
+        }
         let remainingAmount = loan.amount;
         const targetType = loan.type;
         const oppositeType = targetType === 'given' ? 'received' : 'given';
@@ -1134,6 +1138,11 @@ const DataManager = {
     recordLoanRepayment: (loanId, amount, accountId, isDirectPayment = false, description = '', date = null) => {
         const loan = appData.loans.find(l => l.id === loanId);
         if (!loan) return;
+        
+        if (loan.type === 'given' && !isDirectPayment && DataManager.isCreditCardAccount(accountId)) {
+            console.warn("Cannot receive loan repayment into a credit card account.");
+            return false;
+        }
         
         const repaymentDate = date || DataManager.getLocalDateString();
         const remaining = loan.amount - loan.settledAmount;
@@ -1605,7 +1614,7 @@ const CreditCardManager = {
         (appData.transactions || []).forEach(t => {
             const isCardExpense = t.accountId === card.accountId && t.amount < 0;
             const isCardPayment = (t.toAccountId === card.accountId && !t.isCashAdvance) ||
-                                  (t.targetCardId === card.id && !t.isCashAdvance) ||
+                                  (t.targetCardId === card.id && t.accountId !== card.accountId && !t.isCashAdvance) ||
                                   (t.accountId === card.accountId && t.amount > 0) ||
                                   (t.category && t.category.toLowerCase() === 'credit card' && (t.targetCardId === card.id || t.toAccountId === card.accountId));
 

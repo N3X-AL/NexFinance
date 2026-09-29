@@ -264,7 +264,7 @@ const Components = {
                             <div style="font-size: 12px; font-weight: 500; color: ${colorC};">${loan.type === 'given' ? 'Lent / Paid for them' : 'Borrowed / Paid for you'}</div>
                             ${loan.description ? `<div style="font-size: 12px; color: var(--text-primary); margin-top: 4px;">${loan.description}</div>` : ''}
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${DataManager.formatDate(loan.date)}</div>
-                            ${loanAccount ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: flex; align-items: center; gap: 3px;"><span class="material-icons-round" style="font-size: 12px;">account_balance_wallet</span>${loanAccount.name}</div>` : ''}
+                            ${loanAccount ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: flex; align-items: center; gap: 3px;"><span class="material-icons-round" style="font-size: 12px; color: ${loanAccount.type === 'Credit' ? 'var(--warning)' : 'inherit'};">${loanAccount.type === 'Credit' ? 'credit_card' : 'account_balance_wallet'}</span>${DataManager.escapeHtml(loanAccount.name)}${loanAccount.type === 'Credit' ? ' (Credit Card)' : ''}</div>` : ''}
                         </div>
                         <div style="text-align: right;">
                             <span style="font-weight: 600; font-size: 14px;">${DataManager.formatCurrency(isSettled ? loan.amount : loan.amount - loan.settledAmount)}</span>

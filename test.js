@@ -738,6 +738,137 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(!regs.some(t => t.id === 4433), "Preserved card payment with decoupled references must NOT appear in getRegularTransactions");
     console.log("✔ Preserved credit card payment exclusion from regular transactions test passed!");
 
+    // Test 34: Giving a loan from a credit card records transaction as card retail purchase & updates card metrics
+    const loanTestCard = global.CreditCardManager.saveCreditCard({
+        name: 'Venture X',
+        bank: 'Capital One',
+        last4: '7788',
+        creditLimit: 5000,
+        apr: 24.99,
+        billingCycleDay: 15,
+        gracePeriodDays: 25
+    });
+    const cardAccBefore = global.DataManager.getAccountById(loanTestCard.accountId);
+    assert(cardAccBefore.balance === 0, "Initial card balance should be 0");
+
+    const refDate = new Date('2026-09-10');
+    const initialCardMetrics = global.CreditCardManager.getCardMetrics(loanTestCard, refDate);
+    assert(initialCardMetrics.totalOutstanding === 0, "Initial total outstanding is 0");
+    assert(initialCardMetrics.cyclePurchases === 0, "Initial cycle purchases is 0");
+    assert(initialCardMetrics.utilizationRate === 0, "Initial utilization is 0%");
+
+    // Lend money to Dave using the credit card
+    global.DataManager.addLoan({
+        person: 'Dave',
+        amount: 450,
+        type: 'given',
+        date: '2026-09-10',
+        description: 'Flight tickets'
+    }, loanTestCard.accountId);
+
+    // Verify loan is recorded
+    const createdLoan = global.appData.loans.find(l => l.person === 'Dave' && l.amount === 450);
+    assert(createdLoan !== undefined, "Loan to Dave must be recorded");
+    assert(createdLoan.type === 'given', "Loan type must be 'given'");
+    assert(createdLoan.status === 'active', "Loan must be active");
+
+    // Verify disbursement transaction recorded on card
+    const cardLoanTx = global.appData.transactions.find(t => t.loanId === createdLoan.id);
+    assert(cardLoanTx !== undefined, "Loan disbursement transaction must be recorded");
+    assert(cardLoanTx.accountId === loanTestCard.accountId, "Transaction must belong to credit card account");
+    assert(cardLoanTx.amount === -450, "Transaction amount must be -450");
+    assert(cardLoanTx.category === 'Loan', "Transaction category must be 'Loan'");
+    assert(cardLoanTx.merchant === 'Loan Given: Dave (Flight tickets)', "Merchant description must include person and description");
+
+    // Verify credit card account balance updated to negative debt
+    assert(cardAccBefore.balance === -450, "Credit card account balance must be -450");
+
+    // Verify CreditCardManager calculations
+    const updatedCardMetrics = global.CreditCardManager.getCardMetrics(loanTestCard, refDate);
+    assert(updatedCardMetrics.totalOutstanding === 450, "Total outstanding balance must be 450");
+    assert(updatedCardMetrics.cyclePurchases === 450, "Cycle purchases must include the loan purchase");
+    assert(updatedCardMetrics.cashAdvancePurchases === 0, "Must NOT be treated as cash advance");
+    assert(updatedCardMetrics.cashAdvanceInterest === 0, "No cash advance interest");
+    assert(updatedCardMetrics.isGracePeriodActive === true, "Grace period must remain active for purchase");
+    assert(updatedCardMetrics.estimatedInterest === 0, "Zero interest during grace period");
+    assert(updatedCardMetrics.projectedStatementTotal === 450, "Projected statement total must be 450");
+    assert(Math.abs(updatedCardMetrics.utilizationRate - 9.0) < 0.01, "Utilization rate must be 9.0% (450 / 5000)");
+    assert(updatedCardMetrics.cardTransactions.some(t => t.id === cardLoanTx.id), "Card transactions must include the loan transaction");
+    console.log("✔ Credit card loan disbursement and metrics calculation test passed!");
+
+    // Test 35: Person loan card displays credit card badge and credit_card icon
+    const davePersonData = {
+        name: 'Dave',
+        activeLoans: [createdLoan],
+        settledLoans: [],
+        netBalance: 450
+    };
+    const daveCardHtml = global.Components.personLoanCard(davePersonData);
+    assert(daveCardHtml.includes('credit_card'), "Must render credit_card icon on loan card");
+    assert(daveCardHtml.includes('Venture X (Credit Card)'), "Must display card name with (Credit Card) suffix");
+    console.log("✔ Loan card credit card visual badge test passed!");
+
+    // Test 36: Guard prevents receiving loans or loan repayments into credit card
+    const receivedCardLoanResult = global.DataManager.addLoan({
+        person: 'Eve',
+        amount: 300,
+        type: 'received',
+        date: '2026-09-10'
+    }, loanTestCard.accountId);
+    assert(receivedCardLoanResult === false, "addLoan must refuse type 'received' on credit card account");
+    assert(!global.appData.loans.some(l => l.person === 'Eve'), "No received loan should be created for Eve");
+
+    const repaymentResult = global.DataManager.recordLoanRepayment(createdLoan.id, 100, loanTestCard.accountId, false);
+    assert(repaymentResult === false, "recordLoanRepayment must refuse given loan repayment into credit card");
+    assert(cardAccBefore.balance === -450, "Card balance must remain -450 without invalid repayment credit");
+    console.log("✔ Credit card loan reception guards test passed!");
+
+    // Test 37: Auto-offset when giving loan from card
+    // First, borrow 100 from Frank into checking
+    const frankCheckingAcc = { id: 7711, name: 'Frank Checking', type: 'Checking', balance: 1000 };
+    global.appData.accounts.push(frankCheckingAcc);
+    global.DataManager.addLoan({
+        person: 'Frank',
+        amount: 100,
+        type: 'received',
+        date: '2026-09-01',
+        description: 'Concert ticket advance'
+    }, frankCheckingAcc.id);
+    const frankReceivedLoan = global.appData.loans.find(l => l.person === 'Frank' && l.type === 'received');
+    assert(frankReceivedLoan && frankReceivedLoan.status === 'active', "Frank received loan active");
+
+    const cardBalBeforeFrank = cardAccBefore.balance; // -450
+    // Now give Frank a 250 loan from Venture X (buying him dinner for 250)
+    global.DataManager.addLoan({
+        person: 'Frank',
+        amount: 250,
+        type: 'given',
+        date: '2026-09-10',
+        description: 'Fancy dinner'
+    }, loanTestCard.accountId);
+
+    // Frank's received loan must be settled via offset
+    assert(frankReceivedLoan.status === 'settled', "Prior received loan from Frank must be settled by offset");
+    assert(frankReceivedLoan.settledAmount === 100, "Prior received loan settledAmount is 100");
+
+    // A new active loan to Frank for remaining 150 must exist
+    const frankGivenLoan = global.appData.loans.find(l => l.person === 'Frank' && l.type === 'given');
+    assert(frankGivenLoan && frankGivenLoan.amount === 150, "New given loan to Frank must be 150");
+
+    // Total card balance must have decreased by exactly 250 (-450 - 250 = -700)
+    assert(cardAccBefore.balance === cardBalBeforeFrank - 250, "Card balance must decrease by full 250 loan amount");
+    console.log("✔ Credit card loan auto-offsetting test passed!");
+
+    // Test 38: Deleting a credit card loan cleanly restores card balance and metrics
+    global.DataManager.deleteLoan(createdLoan.id);
+    assert(!global.appData.loans.some(l => l.id === createdLoan.id), "Dave loan removed");
+    assert(!global.appData.transactions.some(t => t.loanId === createdLoan.id), "Dave loan transaction removed");
+    assert(cardAccBefore.balance === -250, "Card balance restored (reverted Dave 450 loan, leaving only Frank 250)");
+    const metricsAfterDelete = global.CreditCardManager.getCardMetrics(loanTestCard, refDate);
+    assert(metricsAfterDelete.totalOutstanding === 250, "Metrics total outstanding updated to 250");
+    assert(metricsAfterDelete.cyclePurchases === 250, "Metrics cycle purchases updated to 250");
+    console.log("✔ Credit card loan deletion cleanup test passed!");
+
     console.log("All tests passed successfully!");
 })();
 
