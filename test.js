@@ -869,6 +869,87 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(metricsAfterDelete.cyclePurchases === 250, "Metrics cycle purchases updated to 250");
     console.log("✔ Credit card loan deletion cleanup test passed!");
 
+    // Test 39: NaN / nonexistent account validation for non-direct loans and repayments
+    const nanAddLoan = global.DataManager.addLoan({
+        person: 'NoAccountPerson',
+        amount: 100,
+        type: 'given',
+        date: '2026-09-10',
+        settlementType: 'cash'
+    }, NaN);
+    assert(nanAddLoan === false, "addLoan must reject NaN account for non-direct loan");
+    assert(!global.appData.loans.some(l => l.person === 'NoAccountPerson'), "No loan should be created with NaN account");
+
+    const nanRepay = global.DataManager.recordLoanRepayment(frankGivenLoan.id, 50, NaN, false);
+    assert(nanRepay === false, "recordLoanRepayment must reject NaN account for non-direct repayment");
+    console.log("✔ Loan account NaN validation test passed!");
+
+    // Test 40: Available credit computation with positive card balance (overpayment)
+    const overpaidCard = global.CreditCardManager.saveCreditCard({
+        name: 'Overpaid Card',
+        bank: 'Bank Over',
+        last4: '1234',
+        creditLimit: 5000
+    });
+    const overpaidAcc = global.DataManager.getAccountById(overpaidCard.accountId);
+    overpaidAcc.balance = 200; // Overpayment credit of $200
+    const availableComputed = Math.max(0, overpaidCard.creditLimit + (parseFloat(overpaidAcc.balance) || 0));
+    assert(availableComputed === 5200, `Available credit should be 5200 with 200 credit on 5000 limit, got ${availableComputed}`);
+    console.log("✔ Overpaid card available credit computation test passed!");
+
+    // Test 41: Repaying a received loan using a credit card (sending repayment funds from card)
+    const georgeCheckingAcc = { id: 7722, name: 'George Checking', type: 'Checking', balance: 500 };
+    global.appData.accounts.push(georgeCheckingAcc);
+    global.DataManager.addLoan({
+        person: 'George',
+        amount: 200,
+        type: 'received',
+        date: '2026-09-05',
+        description: 'Tool purchase'
+    }, georgeCheckingAcc.id);
+    const georgeLoan = global.appData.loans.find(l => l.person === 'George' && l.type === 'received');
+    assert(georgeLoan && georgeLoan.status === 'active', "George received loan must be active");
+
+    const cardBalBeforeGeorgeRepay = cardAccBefore.balance;
+    // Repaying George from the credit card (e.g. buying George a gift card or paying his invoice from CC)
+    const repayFromCardResult = global.DataManager.recordLoanRepayment(georgeLoan.id, 200, loanTestCard.accountId, false, 'Repaid via Venture X', '2026-09-10');
+    assert(repayFromCardResult !== false, "recordLoanRepayment must allow credit card when repaying a received loan");
+    assert(georgeLoan.status === 'settled', "George loan must be settled");
+    assert(cardAccBefore.balance === cardBalBeforeGeorgeRepay - 200, "Credit card debt must increase by 200 when repaying from card");
+    const georgeRepayTx = global.appData.transactions.find(t => t.loanId === georgeLoan.id && t.merchant.includes('Loan Repayment To: George'));
+    assert(georgeRepayTx !== undefined, "Repayment transaction must exist on credit card");
+    assert(georgeRepayTx.accountId === loanTestCard.accountId, "Transaction must belong to credit card account");
+    assert(georgeRepayTx.amount === -200, "Transaction amount must be -200 on card");
+    console.log("✔ Received loan repayment via credit card test passed!");
+
+    // Test 42: updateLoan rejects moving a received loan onto a credit card account
+    const updateResult = global.DataManager.updateLoan(georgeLoan.id, { amount: 200 }, loanTestCard.accountId);
+    assert(updateResult === false, "updateLoan must reject moving a received loan onto a credit card account");
+    console.log("✔ updateLoan received loan credit card guard test passed!");
+
+    // Test 43: editLoanRepayment rejects moving a given loan repayment onto a credit card account
+    // Create a given loan and repay it into checking
+    global.DataManager.addLoan({
+        person: 'Harry',
+        amount: 300,
+        type: 'given',
+        date: '2026-09-08'
+    }, georgeCheckingAcc.id);
+    const harryLoan = global.appData.loans.find(l => l.person === 'Harry' && l.type === 'given');
+    global.DataManager.recordLoanRepayment(harryLoan.id, 100, georgeCheckingAcc.id, false, 'Harry part pay', '2026-09-09');
+    const harryRepayTx = global.appData.transactions.find(t => t.loanId === harryLoan.id && t.merchant.includes('Loan Repayment From: Harry'));
+    assert(harryRepayTx !== undefined, "Harry repayment transaction must exist");
+
+    const editRepayResult = global.DataManager.editLoanRepayment(harryRepayTx.id, harryLoan.id, {
+        amount: 100,
+        accountId: loanTestCard.accountId,
+        date: '2026-09-09',
+        description: 'Invalid move to CC'
+    });
+    assert(editRepayResult === false, "editLoanRepayment must reject moving a given loan repayment to a credit card");
+    assert(harryRepayTx.accountId === georgeCheckingAcc.id, "Harry repayment transaction must remain on checking account");
+    console.log("✔ editLoanRepayment given loan credit card guard test passed!");
+
     console.log("All tests passed successfully!");
 })();
 

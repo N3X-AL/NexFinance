@@ -938,6 +938,10 @@ const DataManager = {
     },
     
     addLoan: (loan, accountId) => {
+        if (loan.settlementType !== 'direct' && (isNaN(parseInt(accountId)) || !appData.accounts.some(a => a.id === parseInt(accountId)))) {
+            console.warn("Valid account required for non-direct loan settlement.");
+            return false;
+        }
         if (loan.type === 'received' && DataManager.isCreditCardAccount(accountId)) {
             console.warn("Cannot receive a loan into a credit card account.");
             return false;
@@ -1039,6 +1043,17 @@ const DataManager = {
         const loan = appData.loans.find(l => l.id === loanId);
         if (txIndex === -1 || !loan) return false;
 
+        const newAccountId = parseInt(updatedData.accountId);
+        if (isNaN(newAccountId) || !appData.accounts.some(a => a.id === newAccountId)) {
+            console.warn("Valid account required for loan repayment edit.");
+            return false;
+        }
+
+        if (loan.type === 'given' && DataManager.isCreditCardAccount(newAccountId)) {
+            console.warn("Cannot receive loan repayment into a credit card account.");
+            return false;
+        }
+
         const oldTx = appData.transactions[txIndex];
         const oldAbsAmount = Math.abs(oldTx.amount);
         const newAbsAmount = updatedData.amount;
@@ -1088,9 +1103,20 @@ const DataManager = {
     },
 
     updateLoan: (loanId, newData, accountId) => {
-
         const loan = appData.loans.find(l => l.id === loanId);
-        if (!loan) return;
+        if (!loan) return false;
+
+        const targetAccountId = accountId !== undefined ? parseInt(accountId) : null;
+        if (targetAccountId !== null) {
+            if (isNaN(targetAccountId) || !appData.accounts.some(a => a.id === targetAccountId)) {
+                console.warn("Valid account required for loan update.");
+                return false;
+            }
+            if (loan.type === 'received' && DataManager.isCreditCardAccount(targetAccountId)) {
+                console.warn("Cannot move a received loan onto a credit card account.");
+                return false;
+            }
+        }
 
         const amountDiff = newData.amount - loan.amount;
 
@@ -1137,8 +1163,13 @@ const DataManager = {
 
     recordLoanRepayment: (loanId, amount, accountId, isDirectPayment = false, description = '', date = null) => {
         const loan = appData.loans.find(l => l.id === loanId);
-        if (!loan) return;
+        if (!loan) return false;
         
+        if (!isDirectPayment && (isNaN(parseInt(accountId)) || !appData.accounts.some(a => a.id === parseInt(accountId)))) {
+            console.warn("Valid account required for non-direct loan repayment.");
+            return false;
+        }
+
         if (loan.type === 'given' && !isDirectPayment && DataManager.isCreditCardAccount(accountId)) {
             console.warn("Cannot receive loan repayment into a credit card account.");
             return false;
