@@ -194,10 +194,12 @@ console.log("✔ Settled loans list descending order test passed!");
         gracePeriodDays: 25,
         minPaymentPercent: 3.5,
         minPaymentFloor: 25,
+        lateFee: 0,
         colorTheme: 'obsidian'
     });
     assert(createdCard && createdCard.id, "Credit card must be created with valid ID");
     assert(createdCard.creditLimit === 10000, "Credit limit must be 10000");
+    assert(createdCard.lateFee === 0, "Credit card must preserve configured lateFee of 0 without defaulting to 25");
     const linkedAccount = global.DataManager.getAccountById(createdCard.accountId);
     assert(linkedAccount && linkedAccount.type === 'Credit', "Linked account must be created with type 'Credit'");
     console.log("✔ CreditCardManager card creation and account synchronization test passed!");
@@ -1082,8 +1084,80 @@ console.log("✔ Settled loans list descending order test passed!");
     const afterPayHistory = global.CreditCardManager.getCardBillingHistory(lateCard, new Date('2026-09-14'));
     const paidAugStatement = afterPayHistory.find(s => s.endDateStr === '2026-08-15');
     assert(paidAugStatement.minPaid === true, "Minimum payment should now be satisfied");
-    assert(paidAugStatement.lateFeeCharged === 0, "Late fee should clear once minimum is paid");
-    console.log("✔ Billing history overdue tracking and late fee assessment test passed!");
+    assert(paidAugStatement.status === 'min_paid', "Statement status should transition to min_paid (late)");
+    assert(paidAugStatement.lateFeeCharged === 35, "Assessed late fee transaction remains recorded on statement");
+
+    const afterPayMetrics = global.CreditCardManager.getCardMetrics(lateCard, new Date('2026-09-14'));
+    assert(afterPayMetrics.overdueCount === 0, "Card metrics must report 0 overdue statements once minimum paid");
+
+    // Finding 1: Verify FIFO payment allocation across multiple statements
+    const fifoCard = global.CreditCardManager.saveCreditCard({
+        name: 'FIFO Test Card',
+        creditLimit: 5000,
+        billingCycleDay: 15,
+        gracePeriodDays: 20,
+        minPaymentFloor: 25,
+        minPaymentPercent: 3.5,
+        lateFee: 25
+    });
+    // Purchase in cycle 1 (ending July 15, 2026): $100
+    global.DataManager.addTransaction({
+        date: '2026-07-10',
+        merchant: 'Store Cycle 1',
+        category: 'Shopping',
+        amount: -100,
+        accountId: fifoCard.accountId,
+        status: 'Completed'
+    });
+    // Purchase in cycle 2 (ending Aug 15, 2026): $100
+    global.DataManager.addTransaction({
+        date: '2026-08-10',
+        merchant: 'Store Cycle 2',
+        category: 'Shopping',
+        amount: -100,
+        accountId: fifoCard.accountId,
+        status: 'Completed'
+    });
+    // Make a single payment of $25 on Aug 20 (after cycle 2 cut)
+    global.CreditCardManager.recordCardPayment({
+        fromAccountId: checkingAcc.id,
+        cardId: fifoCard.id,
+        amount: 25,
+        date: '2026-08-20',
+        note: 'Single partial payment'
+    });
+    const fifoHistory = global.CreditCardManager.getCardBillingHistory(fifoCard, new Date('2026-08-25'));
+    const JulyStmt = fifoHistory.find(s => s.endDateStr === '2026-07-15');
+    const AugStmt = fifoHistory.find(s => s.endDateStr === '2026-08-15');
+    assert(JulyStmt !== undefined && AugStmt !== undefined, "Both statements must exist in history");
+    assert(JulyStmt.amountPaid === 25, "First statement should receive the allocated $25 payment");
+    assert(AugStmt.amountPaid === 0, "Second statement should have received 0 because payment was allocated to oldest statement");
+
+    // Finding 4: Brand new card with no transactions must not emit empty statements
+    const brandNewCard = global.CreditCardManager.saveCreditCard({
+        name: 'Brand New Card',
+        creditLimit: 2000,
+        billingCycleDay: 10,
+        gracePeriodDays: 25,
+        lateFee: 25
+    });
+    const emptyHistory = global.CreditCardManager.getCardBillingHistory(brandNewCard, new Date('2026-09-10'));
+    assert(emptyHistory.length === 0, "Brand new card with zero activity should return empty statement history");
+
+    // Finding 3: Late fee input preserves 0 and rejects negative numbers
+    const zeroFeeCard = global.CreditCardManager.saveCreditCard({
+        name: 'Zero Fee Card',
+        creditLimit: 1000,
+        lateFee: 0
+    });
+    assert(zeroFeeCard.lateFee === 0, "lateFee of 0 must be preserved");
+    const negFeeCard = global.CreditCardManager.saveCreditCard({
+        name: 'Negative Fee Card',
+        creditLimit: 1000,
+        lateFee: -15
+    });
+    assert(negFeeCard.lateFee === 0, "Negative lateFee must be clamped to 0");
+    console.log("✔ Billing history overdue tracking, FIFO payment allocation, and fee persistence tests passed!");
 
     console.log("All tests passed successfully!");
 })();

@@ -1491,7 +1491,7 @@ const CreditCardManager = {
             card.gracePeriodDays = Math.max(1, parseInt(cardData.gracePeriodDays) || 25);
             card.minPaymentPercent = parseFloat(cardData.minPaymentPercent) || 3.5;
             card.minPaymentFloor = parseFloat(cardData.minPaymentFloor) || 25;
-            card.lateFee = (cardData.lateFee !== undefined && cardData.lateFee !== '') ? parseFloat(cardData.lateFee) : (card.lateFee !== undefined ? card.lateFee : 25);
+            card.lateFee = (cardData.lateFee !== undefined && cardData.lateFee !== '') ? (!isNaN(parseFloat(cardData.lateFee)) ? Math.max(0, parseFloat(cardData.lateFee)) : 25) : (card.lateFee !== undefined ? Math.max(0, card.lateFee) : 25);
             card.foreignTxFee = parseFloat(cardData.foreignTxFee) || 0;
             card.annualFee = parseFloat(cardData.annualFee) || 0;
             card.colorTheme = cardData.colorTheme || card.colorTheme || 'obsidian';
@@ -1528,7 +1528,7 @@ const CreditCardManager = {
                 gracePeriodDays: Math.max(1, parseInt(cardData.gracePeriodDays) || 25),
                 minPaymentPercent: parseFloat(cardData.minPaymentPercent) || 3.5,
                 minPaymentFloor: parseFloat(cardData.minPaymentFloor) || 25,
-                lateFee: (cardData.lateFee !== undefined && cardData.lateFee !== '') ? parseFloat(cardData.lateFee) : 25,
+                lateFee: (cardData.lateFee !== undefined && cardData.lateFee !== '') ? (!isNaN(parseFloat(cardData.lateFee)) ? Math.max(0, parseFloat(cardData.lateFee)) : 25) : 25,
                 foreignTxFee: parseFloat(cardData.foreignTxFee) || 0,
                 annualFee: parseFloat(cardData.annualFee) || 0,
                 colorTheme: cardData.colorTheme || 'obsidian'
@@ -1633,7 +1633,7 @@ const CreditCardManager = {
         const currentCycle = CreditCardManager.getCardBillingCycle(card, validDate);
         const minFloor = parseFloat(card.minPaymentFloor) || 25;
         const minPercent = (parseFloat(card.minPaymentPercent) || 3.5) / 100;
-        const lateFeeRate = (card.lateFee !== undefined && !isNaN(parseFloat(card.lateFee))) ? parseFloat(card.lateFee) : 25;
+        const lateFeeRate = (card.lateFee !== undefined && !isNaN(parseFloat(card.lateFee))) ? Math.max(0, parseFloat(card.lateFee)) : 25;
 
         // Collect all card transactions sorted by date ascending
         const allTransactions = (appData.transactions || []).filter(t => {
@@ -1646,7 +1646,7 @@ const CreditCardManager = {
             return { ...t, _dateObj: parsedDate, _time: parsedDate.getTime() };
         }).sort((a, b) => a._time - b._time);
 
-        const history = [];
+        const statementCycles = [];
         let curCycleStart = currentCycle.startDate;
 
         for (let i = 0; i < 6; i++) {
@@ -1658,17 +1658,16 @@ const CreditCardManager = {
             const cycleEndMs = pastCycle.endDate.getTime();
             const dueDateMs = pastCycle.dueDate.getTime();
 
-            // Find transactions belonging to this past cycle
+            // Find transactions belonging to this past cycle (excluding late fees posted for this statement)
             const cycleTx = allTransactions.filter(t => t._time >= cycleStartMs && t._time <= cycleEndMs);
 
-            // Calculate cumulative balance as of past cycleEnd
             let cumExpenses = 0;
             let cumPayments = 0;
             let cyclePurchases = 0;
             let cyclePayments = 0;
 
             allTransactions.forEach(t => {
-                const isExpense = t.accountId === card.accountId && t.amount < 0;
+                const isExpense = t.accountId === card.accountId && t.amount < 0 && t.targetStatementId !== `stmt-${pastCycle.endDateStr}`;
                 const isPayment = (t.toAccountId === card.accountId && !t.isCashAdvance) ||
                                   (t.targetCardId === card.id && t.accountId !== card.accountId && !t.isCashAdvance) ||
                                   (t.accountId === card.accountId && t.amount > 0) ||
@@ -1686,57 +1685,15 @@ const CreditCardManager = {
 
             const statementBalance = Math.max(0, cumExpenses - cumPayments);
 
+            // Finding 4: Break on the first empty cycle if there are no earlier transactions
             const earlierTx = allTransactions.some(t => t._time < cycleStartMs);
-            if (cycleTx.length === 0 && statementBalance === 0 && !earlierTx && i > 0) {
+            if (cycleTx.length === 0 && statementBalance === 0 && !earlierTx) {
                 break;
             }
 
             const minDue = statementBalance > 0 ? Math.min(statementBalance, Math.max(minFloor, statementBalance * minPercent)) : 0;
 
-            let paidAfterCut = 0;
-            allTransactions.forEach(t => {
-                const isPayment = (t.toAccountId === card.accountId && !t.isCashAdvance) ||
-                                  (t.targetCardId === card.id && t.accountId !== card.accountId && !t.isCashAdvance) ||
-                                  (t.accountId === card.accountId && t.amount > 0) ||
-                                  (t.category && t.category.toLowerCase() === 'credit card' && (t.targetCardId === card.id || t.toAccountId === card.accountId));
-                if (isPayment && t._time > cycleEndMs && t._time <= validDate.getTime()) {
-                    paidAfterCut += Math.abs(t.amount);
-                }
-            });
-
-            const isPastDue = validDate.getTime() > dueDateMs;
-            const fullyPaid = statementBalance <= 0.01 || paidAfterCut >= statementBalance - 0.01;
-            const minPaid = fullyPaid || paidAfterCut >= minDue - 0.01;
-
-            let status = 'paid';
-            let statusLabel = 'Paid in Full';
-            let statusColor = 'var(--success)';
-            let lateFeeCharged = 0;
-
-            if (statementBalance <= 0.01) {
-                status = 'paid';
-                statusLabel = 'Zero Balance';
-                statusColor = 'var(--success)';
-            } else if (fullyPaid) {
-                status = 'paid';
-                statusLabel = 'Paid in Full';
-                statusColor = 'var(--success)';
-            } else if (minPaid) {
-                status = 'min_paid';
-                statusLabel = 'Min Paid';
-                statusColor = 'var(--primary)';
-            } else if (isPastDue) {
-                status = 'overdue';
-                statusLabel = 'Overdue';
-                statusColor = 'var(--danger)';
-                lateFeeCharged = lateFeeRate;
-            } else {
-                status = 'pending';
-                statusLabel = 'Payment Due';
-                statusColor = 'var(--warning)';
-            }
-
-            history.push({
+            statementCycles.push({
                 statementId: `stmt-${pastCycle.endDateStr}`,
                 startDate: pastCycle.startDate,
                 endDate: pastCycle.endDate,
@@ -1744,25 +1701,132 @@ const CreditCardManager = {
                 startDateStr: pastCycle.startDateStr,
                 endDateStr: pastCycle.endDateStr,
                 dueDateStr: pastCycle.dueDateStr,
+                cycleStartMs,
+                cycleEndMs,
+                dueDateMs,
                 statementBalance,
                 minDue,
-                amountPaid: paidAfterCut,
+                amountPaid: 0,
+                paidBeforeDue: 0,
                 cyclePurchases,
                 cyclePayments,
-                status,
-                statusLabel,
-                statusColor,
-                isPastDue,
-                minPaid,
-                fullyPaid,
-                lateFeeCharged,
                 transactions: cycleTx.sort((a, b) => b._time - a._time)
             });
 
             curCycleStart = pastCycle.startDate;
         }
 
-        return history;
+        // Sort chronologically (oldest statement first) for FIFO payment allocation
+        statementCycles.sort((a, b) => a.cycleEndMs - b.cycleEndMs);
+
+        // Finding 1: Allocate payments once across statements in chronological order
+        const payments = allTransactions.filter(t => {
+            return (t.toAccountId === card.accountId && !t.isCashAdvance) ||
+                   (t.targetCardId === card.id && t.accountId !== card.accountId && !t.isCashAdvance) ||
+                   (t.accountId === card.accountId && t.amount > 0) ||
+                   (t.category && t.category.toLowerCase() === 'credit card' && (t.targetCardId === card.id || t.toAccountId === card.accountId));
+        }).map(p => ({
+            time: p._time,
+            remaining: Math.abs(p.amount)
+        }));
+
+        statementCycles.forEach(s => {
+            let needed = s.statementBalance;
+            if (needed <= 0.001) return;
+
+            for (let p of payments) {
+                if (p.remaining <= 0.001) continue;
+                if (p.time > s.cycleEndMs && p.time <= validDate.getTime()) {
+                    const alloc = Math.min(p.remaining, needed);
+                    if (alloc > 0) {
+                        p.remaining -= alloc;
+                        needed -= alloc;
+                        s.amountPaid += alloc;
+                        if (p.time <= s.dueDateMs) {
+                            s.paidBeforeDue += alloc;
+                        }
+                        if (needed <= 0.001) break;
+                    }
+                }
+            }
+        });
+
+        // Determine compliance, status, and persist assessed late fee exactly once
+        statementCycles.forEach(s => {
+            const isPastDue = validDate.getTime() > s.dueDateMs;
+            const minPaidOnTime = (s.paidBeforeDue >= s.minDue - 0.01) || (s.statementBalance <= 0.01);
+            const fullyPaid = (s.amountPaid >= s.statementBalance - 0.01) || (s.statementBalance <= 0.01);
+            const minPaid = fullyPaid || (s.amountPaid >= s.minDue - 0.01);
+
+            let status = 'paid';
+            let statusLabel = 'Paid in Full';
+            let statusColor = 'var(--success)';
+            let lateFeeCharged = 0;
+
+            if (s.statementBalance <= 0.01) {
+                status = 'paid';
+                statusLabel = 'Zero Balance';
+                statusColor = 'var(--success)';
+            } else if (fullyPaid) {
+                status = 'paid';
+                statusLabel = 'Paid in Full';
+                statusColor = 'var(--success)';
+            } else if (isPastDue) {
+                if (!minPaidOnTime) {
+                    status = minPaid ? 'min_paid' : 'overdue';
+                    statusLabel = minPaid ? 'Min Paid (Late)' : 'Overdue';
+                    statusColor = minPaid ? 'var(--primary)' : 'var(--danger)';
+                    lateFeeCharged = lateFeeRate;
+                } else {
+                    status = 'min_paid';
+                    statusLabel = 'Min Paid';
+                    statusColor = 'var(--primary)';
+                }
+            } else {
+                if (minPaid) {
+                    status = 'min_paid';
+                    statusLabel = 'Min Paid';
+                    statusColor = 'var(--primary)';
+                } else {
+                    status = 'pending';
+                    statusLabel = 'Payment Due';
+                    statusColor = 'var(--warning)';
+                }
+            }
+
+            s.status = status;
+            s.statusLabel = statusLabel;
+            s.statusColor = statusColor;
+            s.isPastDue = isPastDue;
+            s.minPaid = minPaid;
+            s.fullyPaid = fullyPaid;
+            s.lateFeeCharged = lateFeeCharged;
+
+            // Finding 2: Persist assessed late fee exactly once as a real card charge
+            if (lateFeeCharged > 0) {
+                const feeTxExists = (appData.transactions || []).some(t =>
+                    t.accountId === card.accountId &&
+                    (t.targetStatementId === s.statementId || t.merchant === `Late Payment Fee (${s.endDateStr} Statement)`)
+                );
+                if (!feeTxExists) {
+                    const feeDate = new Date(Math.min(validDate.getTime(), s.dueDate.getTime() + 86400000));
+                    const feeTx = {
+                        date: DataManager.getLocalDateString(feeDate),
+                        merchant: `Late Payment Fee (${s.endDateStr} Statement)`,
+                        category: 'Fees & Charges',
+                        amount: -lateFeeCharged,
+                        accountId: card.accountId,
+                        targetCardId: card.id,
+                        targetStatementId: s.statementId,
+                        status: 'Completed'
+                    };
+                    DataManager.addTransaction(feeTx);
+                }
+            }
+        });
+
+        // Return sorted newest first for presentation
+        return statementCycles.sort((a, b) => b.cycleEndMs - a.cycleEndMs);
     },
 
     getCardMetrics: (card, refDate = new Date()) => {
@@ -1848,14 +1912,15 @@ const CreditCardManager = {
 
         let estimatedInterest = cashAdvanceFees + cashAdvanceInterest + carriedCashAdvanceInterest + regularInterest;
 
-        const projectedStatementTotal = Math.max(0, totalOutstanding + estimatedInterest + lateFees);
+        // Since assessed late fees are persisted as real card charges, totalOutstanding already incorporates them.
+        const projectedStatementTotal = Math.max(0, totalOutstanding + estimatedInterest);
 
         // Projected Minimum Due calculation
         const minFloor = parseFloat(card.minPaymentFloor) || 25;
         const minPercent = (parseFloat(card.minPaymentPercent) || 3.5) / 100;
         let projectedMinDue = 0;
         if (projectedStatementTotal > 0) {
-            const percentAmount = (projectedStatementTotal * minPercent) + estimatedInterest + lateFees;
+            const percentAmount = (projectedStatementTotal * minPercent) + estimatedInterest;
             projectedMinDue = Math.min(projectedStatementTotal, Math.max(minFloor, percentAmount));
         }
 
