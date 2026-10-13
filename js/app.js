@@ -944,9 +944,13 @@ class App {
                         <input type="text" inputmode="decimal" id="cc-min-floor" class="form-control math-input" value="25" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Foreign Markup (%)</label>
-                        <input type="text" inputmode="decimal" id="cc-foreign-fee" class="form-control math-input" value="3.0">
+                        <label class="form-label">Late Payment Fee ($)</label>
+                        <input type="text" inputmode="decimal" id="cc-late-fee" class="form-control math-input" value="25" required>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Foreign Markup (%)</label>
+                    <input type="text" inputmode="decimal" id="cc-foreign-fee" class="form-control math-input" value="3.0">
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
@@ -989,6 +993,7 @@ class App {
                 apr: parseFloat(document.getElementById('cc-apr').value),
                 minPaymentPercent: parseFloat(document.getElementById('cc-min-percent').value),
                 minPaymentFloor: parseFloat(document.getElementById('cc-min-floor').value),
+                lateFee: !isNaN(parseFloat(document.getElementById('cc-late-fee').value)) ? Math.max(0, parseFloat(document.getElementById('cc-late-fee').value)) : 25,
                 foreignTxFee: parseFloat(document.getElementById('cc-foreign-fee').value) || 0,
                 cashAdvanceFee: parseFloat(document.getElementById('cc-cash-fee').value) || 0,
                 cashAdvanceApr: parseFloat(document.getElementById('cc-cash-apr').value) || 0,
@@ -1048,9 +1053,13 @@ class App {
                         <input type="text" inputmode="decimal" id="ecc-min-floor" class="form-control math-input" value="${card.minPaymentFloor || 25}" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Foreign Markup (%)</label>
-                        <input type="text" inputmode="decimal" id="ecc-foreign-fee" class="form-control math-input" value="${card.foreignTxFee || 0}">
+                        <label class="form-label">Late Payment Fee ($)</label>
+                        <input type="text" inputmode="decimal" id="ecc-late-fee" class="form-control math-input" value="${card.lateFee !== undefined ? card.lateFee : 25}" required>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Foreign Markup (%)</label>
+                    <input type="text" inputmode="decimal" id="ecc-foreign-fee" class="form-control math-input" value="${card.foreignTxFee || 0}">
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
@@ -1099,6 +1108,7 @@ class App {
                 apr: parseFloat(document.getElementById('ecc-apr').value),
                 minPaymentPercent: parseFloat(document.getElementById('ecc-min-percent').value),
                 minPaymentFloor: parseFloat(document.getElementById('ecc-min-floor').value),
+                lateFee: !isNaN(parseFloat(document.getElementById('ecc-late-fee').value)) ? Math.max(0, parseFloat(document.getElementById('ecc-late-fee').value)) : (card.lateFee !== undefined ? Math.max(0, card.lateFee) : 25),
                 foreignTxFee: parseFloat(document.getElementById('ecc-foreign-fee').value) || 0,
                 cashAdvanceFee: parseFloat(document.getElementById('ecc-cash-fee').value) || 0,
                 cashAdvanceApr: parseFloat(document.getElementById('ecc-cash-apr').value) || 0,
@@ -1151,6 +1161,12 @@ class App {
                         <span style="font-size: 13px; color: var(--text-secondary);">Projected Statement Bill:</span>
                         <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">${DataManager.formatCurrency(metrics.projectedStatementTotal)}</span>
                     </div>
+                    ${metrics.lateFees > 0 ? `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; color: var(--danger); font-size: 13px;">
+                        <span><span class="material-icons-round" style="font-size: 14px; vertical-align: -2px;">warning</span> Includes Late Fee Penalty:</span>
+                        <strong style="color: var(--danger);">+${DataManager.formatCurrency(metrics.lateFees)}</strong>
+                    </div>
+                    ` : ''}
                 </div>
 
                 <div class="form-group">

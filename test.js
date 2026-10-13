@@ -194,10 +194,12 @@ console.log("✔ Settled loans list descending order test passed!");
         gracePeriodDays: 25,
         minPaymentPercent: 3.5,
         minPaymentFloor: 25,
+        lateFee: 0,
         colorTheme: 'obsidian'
     });
     assert(createdCard && createdCard.id, "Credit card must be created with valid ID");
     assert(createdCard.creditLimit === 10000, "Credit limit must be 10000");
+    assert(createdCard.lateFee === 0, "Credit card must preserve configured lateFee of 0 without defaulting to 25");
     const linkedAccount = global.DataManager.getAccountById(createdCard.accountId);
     assert(linkedAccount && linkedAccount.type === 'Credit', "Linked account must be created with type 'Credit'");
     console.log("✔ CreditCardManager card creation and account synchronization test passed!");
@@ -1005,6 +1007,157 @@ console.log("✔ Settled loans list descending order test passed!");
     assert(appJsSource.includes('Current Balance (Live Debt):'), "Pay modal must show Current Balance");
     assert(appJsSource.includes("Current Balance (${DataManager.formatCurrency(metrics.totalOutstanding)})"), "Pay modal must include Current Balance button");
     console.log("✔ Pay credit card modal current balance enhancement test passed!");
+
+    // Test 49: Credit Cards bottom tab division and activity filter toggle
+    global.CreditCardsView.setBottomTab('current-cycle');
+    global.CreditCardsView.setActivityFilter('current');
+    let viewTab1 = global.Views['credit-cards']();
+    assert(viewTab1.includes('Spending During Current Cycle'), "Must have 'Spending During Current Cycle' tab button");
+    assert(viewTab1.includes('Billing History'), "Must have 'Billing History' tab button");
+    assert(viewTab1.includes('id="tab-btn-current-cycle"') && viewTab1.includes('btn-primary'), "Current cycle tab should be active");
+    assert(viewTab1.includes('id="filter-btn-current"'), "Current filter button must exist");
+    assert(viewTab1.includes('id="filter-btn-all"'), "All filter button must exist");
+
+    // Toggle filter to 'all'
+    global.CreditCardsView.setActivityFilter('all');
+    let viewTab1All = global.Views['credit-cards']();
+    assert(viewTab1All.includes('All Activity on'), "Must show All Activity when filter is 'all'");
+
+    // Switch to Billing History tab
+    global.CreditCardsView.setBottomTab('billing-history');
+    let viewTab2 = global.Views['credit-cards']();
+    assert(viewTab2.includes('id="tab-btn-billing-history"') && viewTab2.includes('btn-primary'), "Billing history tab should be active");
+    assert(viewTab2.includes('Statement & Billing History'), "Must render Statement & Billing History header");
+    console.log("✔ Credit Cards bottom tab division and activity filter toggle test passed!");
+
+    // Test 50: Billing history statement generation, overdue tracking, and late fee assessment
+    const lateCard = global.CreditCardManager.saveCreditCard({
+        name: 'Late Test Card',
+        creditLimit: 3000,
+        billingCycleDay: 15,
+        gracePeriodDays: 20,
+        lateFee: 35,
+        minPaymentPercent: 3.5,
+        minPaymentFloor: 25
+    });
+
+    // Add purchase on 2026-08-10 ($200) inside cycle Aug 16-Sep 15 predecessor (July 16 - Aug 15)
+    global.DataManager.addTransaction({
+        date: '2026-08-10',
+        merchant: 'Old Store',
+        category: 'Shopping',
+        amount: -200,
+        accountId: lateCard.accountId,
+        status: 'Completed'
+    });
+
+    // Reference date after due date of Aug 15 statement:
+    // Aug 15 cut -> grace period 20 days -> due date is Sept 4, 2026.
+    // Let refDate be Sept 10, 2026 (past due date, with 0 payments made).
+    const pastDueDate = new Date('2026-09-10');
+    const pastHistory = global.CreditCardManager.getCardBillingHistory(lateCard, pastDueDate);
+    assert(pastHistory.length > 0, "Should have past statement history");
+    const augStatement = pastHistory.find(s => s.endDateStr === '2026-08-15');
+    assert(augStatement !== undefined, "Aug 15 statement must exist");
+    assert(augStatement.statementBalance === 200, "Aug statement balance should be $200");
+    assert(augStatement.minDue === 25, "Aug min due should be $25");
+    assert(augStatement.isPastDue === true, "Aug statement should be past due on Sept 10");
+    assert(augStatement.minPaid === false, "Minimum payment should not be paid");
+    assert(augStatement.status === 'overdue', "Status should be overdue");
+    assert(augStatement.lateFeeCharged === 35, "Late fee of $35 should be charged");
+
+    const lateMetrics = global.CreditCardManager.getCardMetrics(lateCard, pastDueDate);
+    assert(lateMetrics.lateFees === 35, "Card metrics must include $35 late fee");
+    assert(lateMetrics.overdueCount === 1, "Card metrics must report 1 overdue statement");
+    assert(lateMetrics.projectedStatementTotal >= 235, "Projected statement total must include the $35 late fee");
+
+    // Now pay the minimum due ($25) on Sept 12
+    global.CreditCardManager.recordCardPayment({
+        fromAccountId: checkingAcc.id,
+        cardId: lateCard.id,
+        amount: 25,
+        date: '2026-09-12',
+        note: 'Late min payment'
+    });
+
+    // Check on Sept 14: minimum payment is now satisfied
+    const afterPayHistory = global.CreditCardManager.getCardBillingHistory(lateCard, new Date('2026-09-14'));
+    const paidAugStatement = afterPayHistory.find(s => s.endDateStr === '2026-08-15');
+    assert(paidAugStatement.minPaid === true, "Minimum payment should now be satisfied");
+    assert(paidAugStatement.status === 'min_paid', "Statement status should transition to min_paid (late)");
+    assert(paidAugStatement.lateFeeCharged === 35, "Assessed late fee transaction remains recorded on statement");
+
+    const afterPayMetrics = global.CreditCardManager.getCardMetrics(lateCard, new Date('2026-09-14'));
+    assert(afterPayMetrics.overdueCount === 0, "Card metrics must report 0 overdue statements once minimum paid");
+
+    // Finding 1: Verify FIFO payment allocation across multiple statements
+    const fifoCard = global.CreditCardManager.saveCreditCard({
+        name: 'FIFO Test Card',
+        creditLimit: 5000,
+        billingCycleDay: 15,
+        gracePeriodDays: 20,
+        minPaymentFloor: 25,
+        minPaymentPercent: 3.5,
+        lateFee: 25
+    });
+    // Purchase in cycle 1 (ending July 15, 2026): $100
+    global.DataManager.addTransaction({
+        date: '2026-07-10',
+        merchant: 'Store Cycle 1',
+        category: 'Shopping',
+        amount: -100,
+        accountId: fifoCard.accountId,
+        status: 'Completed'
+    });
+    // Purchase in cycle 2 (ending Aug 15, 2026): $100
+    global.DataManager.addTransaction({
+        date: '2026-08-10',
+        merchant: 'Store Cycle 2',
+        category: 'Shopping',
+        amount: -100,
+        accountId: fifoCard.accountId,
+        status: 'Completed'
+    });
+    // Make a single payment of $25 on Aug 20 (after cycle 2 cut)
+    global.CreditCardManager.recordCardPayment({
+        fromAccountId: checkingAcc.id,
+        cardId: fifoCard.id,
+        amount: 25,
+        date: '2026-08-20',
+        note: 'Single partial payment'
+    });
+    const fifoHistory = global.CreditCardManager.getCardBillingHistory(fifoCard, new Date('2026-08-25'));
+    const JulyStmt = fifoHistory.find(s => s.endDateStr === '2026-07-15');
+    const AugStmt = fifoHistory.find(s => s.endDateStr === '2026-08-15');
+    assert(JulyStmt !== undefined && AugStmt !== undefined, "Both statements must exist in history");
+    assert(JulyStmt.amountPaid === 25, "First statement should receive the allocated $25 payment");
+    assert(AugStmt.amountPaid === 0, "Second statement should have received 0 because payment was allocated to oldest statement");
+
+    // Finding 4: Brand new card with no transactions must not emit empty statements
+    const brandNewCard = global.CreditCardManager.saveCreditCard({
+        name: 'Brand New Card',
+        creditLimit: 2000,
+        billingCycleDay: 10,
+        gracePeriodDays: 25,
+        lateFee: 25
+    });
+    const emptyHistory = global.CreditCardManager.getCardBillingHistory(brandNewCard, new Date('2026-09-10'));
+    assert(emptyHistory.length === 0, "Brand new card with zero activity should return empty statement history");
+
+    // Finding 3: Late fee input preserves 0 and rejects negative numbers
+    const zeroFeeCard = global.CreditCardManager.saveCreditCard({
+        name: 'Zero Fee Card',
+        creditLimit: 1000,
+        lateFee: 0
+    });
+    assert(zeroFeeCard.lateFee === 0, "lateFee of 0 must be preserved");
+    const negFeeCard = global.CreditCardManager.saveCreditCard({
+        name: 'Negative Fee Card',
+        creditLimit: 1000,
+        lateFee: -15
+    });
+    assert(negFeeCard.lateFee === 0, "Negative lateFee must be clamped to 0");
+    console.log("✔ Billing history overdue tracking, FIFO payment allocation, and fee persistence tests passed!");
 
     console.log("All tests passed successfully!");
 })();
